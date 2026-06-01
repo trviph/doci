@@ -6,6 +6,7 @@ from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
 from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.botocore import BotocoreInstrumentor
+from opentelemetry.instrumentation.psycopg2 import Psycopg2Instrumentor
 from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.metrics import MeterProvider
@@ -53,10 +54,16 @@ BotocoreInstrumentor().instrument(
     meter_provider=METER_PROVIDER,
 )
 
+# Auto-instrument psycopg2 so every query emits low-level DB spans bound to our
+# provider (complements the higher-level @with_span on the Postgres client).
+# skip_dep_check: the dist is `psycopg2-binary`, but the check looks for `psycopg2`.
+Psycopg2Instrumentor().instrument(tracer_provider=TRACER_PROVIDER, skip_dep_check=True)
+
 
 def shutdown() -> None:
     """Flush and close all telemetry providers. Call on application shutdown."""
     BotocoreInstrumentor().uninstrument()
+    Psycopg2Instrumentor().uninstrument()
     TRACER_PROVIDER.shutdown()
     METER_PROVIDER.shutdown()
     LOGGER_PROVIDER.shutdown()
