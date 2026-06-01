@@ -1,0 +1,22 @@
+services:
+  valkey:
+    image: valkey/valkey:9-alpine
+    command: valkey-server --save 60 1 --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - valkey_data:/data
+    healthcheck:
+      test: [ "CMD", "valkey-cli", "ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - doci
+
+volumes:
+  valkey_data:
+
+networks:
+  doci:
+    name: doci

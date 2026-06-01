@@ -1,0 +1,64 @@
+name: Migration (remote)
+
+# Applies migrations against a REAL database. Manual-only, runs from any branch,
+# but only after the local Migration check has succeeded on that same branch.
+# `production` is further restricted to the main branch only (non-prod
+# environments may be migrated from any branch). Pick the target environment;
+# its DATABASE_URL (and any approval rules) come from the matching GitHub
+# Environment — the secret name is always DATABASE_URL. Add uat/dev by adding
+# them to `options` below and creating the matching Environments + secrets.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        type: choice
+        default: production
+        options:
+          - production
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Restrict production to main
+        run: |
+          if [ "${{ inputs.environment }}" = "production" ] && [ "${{ github.ref_name }}" != "main" ]; then
+            echo "::error::production can only be migrated from the main branch (got '${{ github.ref_name }}')."
+            exit 1
+          fi
+
+      - name: Require local migration check to have succeeded on this branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          conclusion=$(gh api \
+            "/repos/${{ github.repository }}/actions/workflows/migration-local.yml/runs?branch=${{ github.ref_name }}&status=completed&per_page=1" \
+            --jq '.workflow_runs[0].conclusion // "none"')
+          echo "Latest Migration (local) run on ${{ github.ref_name }}: $conclusion"
+          if [ "$conclusion" != "success" ]; then
+            echo "::error::Migration (local) has not succeeded on ${{ github.ref_name }} (latest: $conclusion). Aborting."
+            exit 1
+          fi
+
+  apply:
+    needs: guard
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.ref_name }}
+
+      - uses: ariga/setup-atlas@v0
+
+      - name: Apply migrations to ${{ inputs.environment }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: atlas migrate apply --dir "file://migrations" --url "$DATABASE_URL"

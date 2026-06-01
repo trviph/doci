@@ -1,0 +1,41 @@
+name: Migration (local)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - migrations/**
+      - docker/compose.postgres.yml
+  pull_request:
+    paths:
+      - migrations/**
+      - docker/compose.postgres.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: ariga/setup-atlas@v0
+
+      - name: Check atlas.sum is up to date
+        run: |
+          atlas migrate hash --dir "file://migrations"
+          if ! git diff --quiet migrations/atlas.sum; then
+            echo "::error::migrations/atlas.sum is stale — run 'make atlas-hash' and commit."
+            git --no-pager diff migrations/atlas.sum
+            exit 1
+          fi
+
+      - name: Start Postgres
+        run: docker compose -f docker/compose.postgres.yml up -d --wait
+
+      - name: Apply migrations
+        env:
+          DATABASE_URL: postgres://doci:doci@localhost:5432/doci?sslmode=disable
+        run: atlas migrate apply --dir "file://migrations" --url "$DATABASE_URL"
