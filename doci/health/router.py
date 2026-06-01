@@ -8,7 +8,7 @@ Response shapes are documented for OpenAPI via the Pydantic models below.
 
 from typing import Literal
 
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, Field
 
 from doci.health.service import HealthService, HealthStatus
@@ -58,16 +58,29 @@ _READY_DEGRADED = {
 _READY_UNAVAILABLE = {
     "status": "unavailable",
     "checks": {
-        "postgres": {"ok": False, "critical": True, "latency_ms": 2000.0, "error": "timeout"},
+        "postgres": {
+            "ok": False,
+            "critical": True,
+            "latency_ms": 2000.0,
+            "error": "timeout",
+        },
         "objstore": {"ok": True, "critical": True, "latency_ms": 3.4},
         "kv": {"ok": True, "critical": False, "latency_ms": 0.5},
     },
 }
 
 
-def build_health_router(health: HealthService) -> APIRouter:
-    """Build an APIRouter wired to the given :class:`HealthService`."""
+def build_health_router(health: HealthService | None = None) -> APIRouter:
+    """Build an APIRouter for health probes.
+
+    Pass a :class:`HealthService` to bind it directly (handy for tests), or omit
+    it to resolve ``request.app.state.health`` at request time (the app wires the
+    service into ``app.state`` during its lifespan).
+    """
     router = APIRouter(tags=["health"])
+
+    def _resolve(request: Request) -> HealthService:
+        return health if health is not None else request.app.state.health
 
     @router.get(
         "/livez",
@@ -77,8 +90,8 @@ def build_health_router(health: HealthService) -> APIRouter:
         response_model=HealthReportModel,
         responses={200: {"content": {"application/json": {"example": _LIVE_EXAMPLE}}}},
     )
-    async def livez() -> HealthReportModel:
-        return HealthReportModel(**health.livez().to_dict())
+    async def livez(svc: HealthService = Depends(_resolve)) -> HealthReportModel:
+        return HealthReportModel(**svc.livez().to_dict())
 
     @router.get(
         "/readyz",
@@ -105,8 +118,10 @@ def build_health_router(health: HealthService) -> APIRouter:
             },
         },
     )
-    async def readyz(response: Response) -> HealthReportModel:
-        report = await health.readyz()
+    async def readyz(
+        response: Response, svc: HealthService = Depends(_resolve)
+    ) -> HealthReportModel:
+        report = await svc.readyz()
         # degraded still serves traffic (200); only unavailable pulls from rotation.
         if report.status is HealthStatus.UNAVAILABLE:
             response.status_code = 503

@@ -310,7 +310,7 @@ wheels = [
 [[package]]
 name = "doci"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "boto3" },
     { name = "cachetools" },
@@ -330,6 +330,7 @@ dependencies = [
     { name = "pymupdf" },
     { name = "redis", extra = ["hiredis"] },
     { name = "ruff" },
+    { name = "uvicorn" },
 ]
 
 [package.metadata]
@@ -352,6 +353,7 @@ requires-dist = [
     { name = "pymupdf", specifier = ">=1.27.2.3" },
     { name = "redis", extras = ["hiredis"], specifier = ">=8.0.0" },
     { name = "ruff", specifier = ">=0.15.15" },
+    { name = "uvicorn", specifier = ">=0.48.0" },
 ]
 
 [[package]]

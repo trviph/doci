@@ -88,7 +88,10 @@ class HealthService:
     async def readyz(self) -> HealthReport:
         """Readiness: probe all dependencies concurrently and classify by criticality."""
         results = await asyncio.gather(
-            *(self._probe(name, client, critical) for name, client, critical in self._deps)
+            *(
+                self._probe(name, client, critical)
+                for name, client, critical in self._deps
+            )
         )
         critical_down = any(not r.ok for r in results if r.critical)
         noncritical_down = any(not r.ok for r in results if not r.critical)
@@ -106,6 +109,8 @@ class HealthService:
             await asyncio.wait_for(client.ping(), self._timeout_seconds)
         except Exception as exc:  # noqa: BLE001 — any failure means "not ready"
             elapsed = (time.perf_counter() - start) * 1000.0
-            return CheckResult(name, False, critical, elapsed, error=str(exc) or type(exc).__name__)
+            return CheckResult(
+                name, False, critical, elapsed, error=str(exc) or type(exc).__name__
+            )
         elapsed = (time.perf_counter() - start) * 1000.0
         return CheckResult(name, True, critical, elapsed)

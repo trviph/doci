@@ -35,7 +35,7 @@ def _exec(conn: Any, query: str, params: _Params, fetch: str) -> Any:
     ``fetch`` is one of ``"all"`` / ``"one"`` / ``"val"`` / ``"none"``. Does not
     commit — the caller owns transaction boundaries.
     """
-    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+    with conn.cursor() as cur:
         cur.execute(query, params)
         if fetch == "all":
             return cur.fetchall()
@@ -98,7 +98,10 @@ class Postgres:
     def __init__(self, config: PostgresConfig) -> None:
         self._config = config
         self._pool = ThreadedConnectionPool(
-            config.pool_min, config.pool_max, **config.connect_kwargs()
+            config.pool_min,
+            config.pool_max,
+            cursor_factory=RealDictCursor,
+            **config.connect_kwargs(),
         )
 
     @classmethod

@@ -1,3 +1,5 @@
+name: doci
+
 include:
   - compose.postgres.yml
   - compose.minio.yml
