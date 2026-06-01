@@ -1,0 +1,75 @@
+name: Release
+
+# On a semver tag push (v1.2.3, v1.2.3-rc1, ...), build a linux/amd64
+# container image and publish it to GitHub Container Registry.
+#
+# Image: ghcr.io/<owner>/<repo>
+# Tags:  the full version, major.minor, and major.
+#        The floating `:latest` tag is owned by tag-latest.yml — it is
+#        only applied when a real GitHub Release is published (not on
+#        every tag push), so tagging-without-releasing never moves
+#        `:latest`.
+#
+# First push linked to a new repo lands as a private package. To make
+# the image pullable without auth, open the package on github.com and
+# set its visibility to Public once.
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build (e.g. v1.2.3)'
+        required: true
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          # Never auto-apply `:latest` here. That tag is moved by
+          # tag-latest.yml on a real Release event.
+          flavor: |
+            latest=false
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
