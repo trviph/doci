@@ -46,7 +46,9 @@ class KVScript:
 
     @with_span(kind=SpanKind.CLIENT)
     @with_metrics()
-    async def __call__(self, *, keys: Sequence[str] = (), args: Sequence[Any] = ()) -> Any:
+    async def __call__(
+        self, *, keys: Sequence[str] = (), args: Sequence[Any] = ()
+    ) -> Any:
         _annotate()
         return await self._script(
             keys=self._kv._keys(keys), args=list(args), client=self._kv._redis
