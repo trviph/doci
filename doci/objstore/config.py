@@ -26,8 +26,6 @@ class ObjStoreConfig:
     secret_access_key: str | None = None
     bucket: str | None = None
     presign_expiry: int = 900
-    presign_clock_skew: int = 30
-    presign_cache_max: int = 1024
     force_path_style: bool = True
 
     @classmethod
@@ -41,7 +39,5 @@ class ObjStoreConfig:
             secret_access_key=os.getenv("S3_SECRET_ACCESS_KEY"),
             bucket=os.getenv("S3_BUCKET"),
             presign_expiry=int(os.getenv("S3_PRESIGN_EXPIRY", "900")),
-            presign_clock_skew=int(os.getenv("S3_PRESIGN_CLOCK_SKEW", "30")),
-            presign_cache_max=int(os.getenv("S3_PRESIGN_CACHE_MAX", "1024")),
             force_path_style=_env_bool("S3_FORCE_PATH_STYLE", True),
         )

@@ -6,14 +6,12 @@ Designed to be constructed once and injected as a dependency.
 """
 
 import asyncio
-import json
-from collections.abc import AsyncIterator, Callable, Mapping
-from typing import Any, TypeVar
+from collections.abc import AsyncIterator, Mapping
+from typing import Any
 
 import boto3
 from botocore.client import BaseClient
 from botocore.config import Config
-from cachetools import TLRUCache
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind
 
@@ -21,24 +19,12 @@ from doci.objstore.config import ObjStoreConfig
 from doci.objstore.models import ObjectMetadata, PresignedPost
 from doci.telemetry import Counter, current_report, traced, with_metrics, with_span
 
-_T = TypeVar("_T")
-
 #: Bytes transferred through download/stream, tagged with a `direction` attribute.
 OBJSTORE_BYTES = Counter(
     "doci.objstore.bytes", unit="By", description="Bytes transferred"
 )
 
 _DEFAULT_TRACER = trace.get_tracer("doci.objstore")
-
-
-def _presign_ttu(_key: Any, value: tuple[Any, float], now: float) -> float:
-    """time-to-use for the presign cache: entry expires at ``now + ttl``.
-
-    ``value`` is ``(result, ttl)``; the per-entry ttl is set strictly below the
-    URL's real validity (``expires_in - presign_clock_skew``) so a reused URL
-    always keeps the skew margin of life, covering host/store clock drift.
-    """
-    return now + value[1]
 
 
 @traced
@@ -62,13 +48,6 @@ class ObjStore:
             boto3.client("s3", **self._client_kwargs(pub))
             if pub and pub != config.endpoint_url
             else self._s3
-        )
-        # Battle-tested TTL+LRU cache; per-entry TTL via the ttu callback. None
-        # disables caching. Values are (result, ttl) tuples (see _presign_ttu).
-        self._presign_cache: TLRUCache[tuple[Any, ...], tuple[Any, float]] | None = (
-            TLRUCache(maxsize=config.presign_cache_max, ttu=_presign_ttu)
-            if config.presign_cache_max > 0
-            else None
         )
 
     @classmethod
@@ -125,20 +104,6 @@ class ObjStore:
         span.set_attribute("aws.s3.bucket", bucket)
         span.set_attribute("aws.s3.key", key)
 
-    def _cached_presign(
-        self, cache_key: tuple[Any, ...], expires_in: int, generate: Callable[[], _T]
-    ) -> _T:
-        """Return a cached presigned result, or generate + cache it."""
-        ttl = expires_in - self._config.presign_clock_skew
-        if self._presign_cache is None or ttl <= 0:
-            return generate()
-        try:
-            return self._presign_cache[cache_key][0]
-        except KeyError:
-            value = generate()
-            self._presign_cache[cache_key] = (value, ttl)
-            return value
-
     # endregion
 
     # region presigning (no network I/O)
@@ -162,19 +127,8 @@ class ObjStore:
             params["ContentType"] = content_type
         if extra_params:
             params.update(extra_params)
-        cache_key = (
-            "put",
-            b,
-            key,
-            exp,
-            json.dumps(params, sort_keys=True, default=str),
-        )
-        return self._cached_presign(
-            cache_key,
-            exp,
-            lambda: self._presign_s3.generate_presigned_url(
-                "put_object", Params=params, ExpiresIn=exp
-            ),
+        return self._presign_s3.generate_presigned_url(
+            "put_object", Params=params, ExpiresIn=exp
         )
 
     @with_span(kind=SpanKind.INTERNAL)
@@ -192,25 +146,10 @@ class ObjStore:
         b = self._bucket(bucket)
         exp = self._expiry(expires_in)
         self._annotate(b, key)
-        cache_key = (
-            "post",
-            b,
-            key,
-            exp,
-            json.dumps(
-                {"fields": fields, "conditions": conditions},
-                sort_keys=True,
-                default=str,
-            ),
+        resp = self._presign_s3.generate_presigned_post(
+            Bucket=b, Key=key, Fields=fields, Conditions=conditions, ExpiresIn=exp
         )
-
-        def generate() -> PresignedPost:
-            resp = self._presign_s3.generate_presigned_post(
-                Bucket=b, Key=key, Fields=fields, Conditions=conditions, ExpiresIn=exp
-            )
-            return PresignedPost(url=resp["url"], fields=resp["fields"])
-
-        return self._cached_presign(cache_key, exp, generate)
+        return PresignedPost(url=resp["url"], fields=resp["fields"])
 
     @with_span(kind=SpanKind.INTERNAL)
     @with_metrics()
@@ -231,13 +170,8 @@ class ObjStore:
             params["ResponseContentDisposition"] = (
                 f'attachment; filename="{download_as}"'
             )
-        cache_key = ("get", b, key, exp, download_as or "")
-        return self._cached_presign(
-            cache_key,
-            exp,
-            lambda: self._presign_s3.generate_presigned_url(
-                "get_object", Params=params, ExpiresIn=exp
-            ),
+        return self._presign_s3.generate_presigned_url(
+            "get_object", Params=params, ExpiresIn=exp
         )
 
     # endregion
