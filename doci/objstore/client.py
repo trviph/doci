@@ -76,6 +76,16 @@ class ObjStore:
         return cls(ObjStoreConfig.from_env())
 
     # region lifecycle
+    async def ping(self) -> None:
+        """Liveness probe; raises if the store is unreachable. Used by health checks."""
+        await asyncio.to_thread(self._ping_sync)
+
+    def _ping_sync(self) -> None:
+        if self._config.bucket:
+            self._s3.head_bucket(Bucket=self._config.bucket)
+        else:
+            self._s3.list_buckets()
+
     def close(self) -> None:
         """Close the underlying boto3 client(s). Call on application shutdown."""
         self._s3.close()

@@ -75,6 +75,10 @@ class KV:
         return cls(KVConfig.from_env())
 
     # region lifecycle
+    async def ping(self) -> None:
+        """Liveness probe; raises if the server is unreachable. Used by health checks."""
+        await self._redis.ping()
+
     async def aclose(self) -> None:
         """Close the client and its connection pool. Call on application shutdown."""
         await self._redis.aclose()

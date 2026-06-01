@@ -106,6 +106,10 @@ class Postgres:
         return cls(PostgresConfig.from_env())
 
     # region lifecycle
+    async def ping(self) -> None:
+        """Liveness probe; raises if the database is unreachable. Used by health checks."""
+        await asyncio.to_thread(self._run, "select 1", None, "val")
+
     def close(self) -> None:
         """Close all pooled connections. Call on application shutdown."""
         self._pool.closeall()
