@@ -9,6 +9,7 @@ from fastapi import Request
 
 from doci.health import HealthService
 from doci.kvstore import KV
+from doci.media import MediaService
 from doci.objstore import ObjStore
 from doci.postgres import Postgres
 
@@ -27,3 +28,7 @@ def get_kv(request: Request) -> KV:
 
 def get_health(request: Request) -> HealthService:
     return request.app.state.health
+
+
+def get_media(request: Request) -> MediaService:
+    return request.app.state.media

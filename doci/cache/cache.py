@@ -60,7 +60,9 @@ class Cache:
         self._namespace = namespace
         self._default_ttl = default_ttl
         self._cooldown = kv_cooldown_seconds
-        self._mem: TLRUCache[str, tuple[Any, float]] = TLRUCache(maxsize=maxsize, ttu=_ttu)
+        self._mem: TLRUCache[str, tuple[Any, float]] = TLRUCache(
+            maxsize=maxsize, ttu=_ttu
+        )
         self._kv_down_until = 0.0  # monotonic deadline; KV is skipped until then
 
     # region internals

@@ -51,7 +51,9 @@ def _resolve_key(
         bound = inspect.signature(func).bind(*args, **kwargs)
         bound.apply_defaults()
         return key.format(**bound.arguments)
-    return f"{func.__qualname__}:{json.dumps([args, kwargs], default=str, sort_keys=True)}"
+    return (
+        f"{func.__qualname__}:{json.dumps([args, kwargs], default=str, sort_keys=True)}"
+    )
 
 
 def cache(

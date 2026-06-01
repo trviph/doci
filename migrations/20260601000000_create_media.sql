@@ -1,9 +1,7 @@
-CREATE TYPE media_type AS ENUM ('original', 'thumb', 'page');
-
 CREATE TABLE media (
     id          UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
     parent_id   UUID          REFERENCES media(id) ON DELETE CASCADE,
-    type        media_type    NOT NULL DEFAULT 'original',
+    type        SMALLINT      NOT NULL DEFAULT 0 CHECK (type >= 0),  -- 0=original 1=thumb 2=page
     object_key  VARCHAR(1024) NOT NULL UNIQUE,
     name        VARCHAR(255),
     mime_type   VARCHAR(127),
