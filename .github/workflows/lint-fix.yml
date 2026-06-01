@@ -1,0 +1,71 @@
+name: Lint fix
+
+on:
+  workflow_run:
+    workflows: ["Lint"]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  fix:
+    if: >-
+      ${{ github.event.workflow_run.conclusion == 'failure'
+      && github.event.workflow_run.event == 'push'
+      && github.event.workflow_run.head_branch == 'main' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_branch }}
+          fetch-depth: 0
+
+      - name: Set up uv (and Python from .python-version)
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Apply ruff fixes
+        run: |
+          uv run ruff check . --fix
+          uv run ruff format .
+
+      - name: Detect changes
+        id: changes
+        run: |
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Configure git identity
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Open PR with fixes
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="chore/ruff-fixes-${{ github.event.workflow_run.id }}"
+          git checkout -b "$BRANCH"
+          git add -A
+          git commit -m "chore: apply ruff fixes"
+          git push origin "$BRANCH"
+          gh pr create \
+            --title "chore: apply ruff fixes" \
+            --body "Automated ruff fixes from [Lint run #${{ github.event.workflow_run.id }}](${{ github.event.workflow_run.html_url }})." \
+            --base main \
+            --head "$BRANCH"
+
+      - name: Nothing to fix
+        if: steps.changes.outputs.changed == 'false'
+        run: echo "::notice::Lint failed but ruff produced no changes; manual review required."
