@@ -105,7 +105,7 @@ class Postgres:
     def from_env(cls) -> "Postgres":
         return cls(PostgresConfig.from_env())
 
-    # -- lifecycle -------------------------------------------------------- #
+    # region lifecycle
     def close(self) -> None:
         """Close all pooled connections. Call on application shutdown."""
         self._pool.closeall()
@@ -116,7 +116,9 @@ class Postgres:
     def __exit__(self, *exc: object) -> None:
         self.close()
 
-    # -- internals -------------------------------------------------------- #
+    # endregion
+
+    # region internals
     def _run(self, query: str, params: _Params, fetch: str) -> Any:
         conn = self._pool.getconn()
         try:
@@ -129,7 +131,9 @@ class Postgres:
         finally:
             self._pool.putconn(conn)
 
-    # -- query helpers (auto-commit, one pooled connection each) ---------- #
+    # endregion
+
+    # region query helpers (auto-commit, one pooled connection each)
     @with_span(kind=SpanKind.CLIENT)
     @with_metrics()
     async def fetch_all(
@@ -160,7 +164,9 @@ class Postgres:
         _annotate()
         return await asyncio.to_thread(self._run, query, params, "none")
 
-    # -- multi-statement transaction -------------------------------------- #
+    # endregion
+
+    # region multi-statement transaction
     @asynccontextmanager
     async def transaction(self) -> AsyncIterator[Transaction]:
         """Pin one pooled connection across statements; commit on exit, rollback on error."""
@@ -173,3 +179,5 @@ class Postgres:
             raise
         finally:
             self._pool.putconn(conn)
+
+    # endregion

@@ -75,7 +75,7 @@ class ObjStore:
     def from_env(cls) -> "ObjStore":
         return cls(ObjStoreConfig.from_env())
 
-    # -- lifecycle -------------------------------------------------------- #
+    # region lifecycle
     def close(self) -> None:
         """Close the underlying boto3 client(s). Call on application shutdown."""
         self._s3.close()
@@ -88,7 +88,9 @@ class ObjStore:
     def __exit__(self, *exc: object) -> None:
         self.close()
 
-    # -- internals -------------------------------------------------------- #
+    # endregion
+
+    # region internals
     def _client_kwargs(self, endpoint_url: str | None) -> dict[str, Any]:
         style = "path" if self._config.force_path_style else "auto"
         return dict(
@@ -127,7 +129,9 @@ class ObjStore:
             self._presign_cache[cache_key] = (value, ttl)
             return value
 
-    # -- presigning (no network I/O) -------------------------------------- #
+    # endregion
+
+    # region presigning (no network I/O)
     @with_span(kind=SpanKind.INTERNAL)
     @with_metrics()
     async def presign_put(
@@ -226,7 +230,9 @@ class ObjStore:
             ),
         )
 
-    # -- object I/O (offloaded to threads) -------------------------------- #
+    # endregion
+
+    # region object I/O (offloaded to threads)
     @with_span(kind=SpanKind.CLIENT)
     @with_metrics()
     async def download(self, key: str, *, bucket: str | None = None) -> bytes:
@@ -290,3 +296,5 @@ class ObjStore:
             last_modified=head.get("LastModified"),
             metadata=head.get("Metadata", {}),
         )
+
+    # endregion

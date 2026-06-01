@@ -32,9 +32,7 @@ _DEFAULT_TRACER: Tracer = trace.get_tracer("doci")
 _DEFAULT_METER = metrics.get_meter("doci")
 
 
-# --------------------------------------------------------------------------- #
-# 1. Class tracer + 2. span decorator
-# --------------------------------------------------------------------------- #
+# region 1. Class tracer + 2. span decorator
 class _Holder:
     """Mutable cell holding the tracer a span wrapper should use.
 
@@ -138,9 +136,10 @@ def with_span(
     return decorate
 
 
-# --------------------------------------------------------------------------- #
-# 3. Declared metrics + gather-and-report
-# --------------------------------------------------------------------------- #
+# endregion
+
+
+# region 3. Declared metrics + gather-and-report
 class _Metric:
     """Descriptor for a single metric, declared once at module level.
 
@@ -312,3 +311,6 @@ def with_metrics(
         return wrapper  # type: ignore[return-value]
 
     return decorate
+
+
+# endregion

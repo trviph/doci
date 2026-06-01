@@ -7,6 +7,7 @@ from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExp
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.botocore import BotocoreInstrumentor
 from opentelemetry.instrumentation.psycopg2 import Psycopg2Instrumentor
+from opentelemetry.instrumentation.redis import RedisInstrumentor
 from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.metrics import MeterProvider
@@ -59,11 +60,16 @@ BotocoreInstrumentor().instrument(
 # skip_dep_check: the dist is `psycopg2-binary`, but the check looks for `psycopg2`.
 Psycopg2Instrumentor().instrument(tracer_provider=TRACER_PROVIDER, skip_dep_check=True)
 
+# Auto-instrument redis/valkey so every command emits low-level client spans
+# bound to our provider (complements the higher-level @with_span on the KV client).
+RedisInstrumentor().instrument(tracer_provider=TRACER_PROVIDER)
+
 
 def shutdown() -> None:
     """Flush and close all telemetry providers. Call on application shutdown."""
     BotocoreInstrumentor().uninstrument()
     Psycopg2Instrumentor().uninstrument()
+    RedisInstrumentor().uninstrument()
     TRACER_PROVIDER.shutdown()
     METER_PROVIDER.shutdown()
     LOGGER_PROVIDER.shutdown()
