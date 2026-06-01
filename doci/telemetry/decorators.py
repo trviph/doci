@@ -55,7 +55,9 @@ def traced(cls: _C) -> _C: ...
 def traced(cls: None = ..., *, name: str | None = ...) -> Callable[[_C], _C]: ...
 
 
-def traced(cls: _C | None = None, *, name: str | None = None) -> _C | Callable[[_C], _C]:
+def traced(
+    cls: _C | None = None, *, name: str | None = None
+) -> _C | Callable[[_C], _C]:
     """Class decorator: give the class its own named tracer.
 
     Binds every ``@with_span``-decorated method on the class to that tracer.
@@ -66,7 +68,9 @@ def traced(cls: _C | None = None, *, name: str | None = None) -> _C | Callable[[
         tracer = trace.get_tracer(name or cls.__qualname__)
         cls.__otel_tracer__ = tracer
         for attr in vars(cls).values():
-            func = attr.__func__ if isinstance(attr, (staticmethod, classmethod)) else attr
+            func = (
+                attr.__func__ if isinstance(attr, (staticmethod, classmethod)) else attr
+            )
             holder: _Holder | None = getattr(func, "__otel_span_holder__", None)
             if holder is not None:
                 holder.tracer = tracer
@@ -230,7 +234,9 @@ class Report:
                 metric._emit(value, attrs)
 
 
-_current_report: ContextVar[Report | None] = ContextVar("doci_current_report", default=None)
+_current_report: ContextVar[Report | None] = ContextVar(
+    "doci_current_report", default=None
+)
 
 
 def current_report() -> Report:
@@ -243,11 +249,15 @@ def current_report() -> Report:
 
 # Auto metrics shared across all decorated operations; tagged with the
 # `operation` and `outcome` attributes to keep cardinality manageable.
-_OP_DURATION = Histogram("doci.operation.duration", unit="ms", description="Operation duration")
+_OP_DURATION = Histogram(
+    "doci.operation.duration", unit="ms", description="Operation duration"
+)
 _OP_CALLS = Counter("doci.operation.calls", description="Operation invocations")
 
 
-def with_metrics(name: str | None = None) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
+def with_metrics(
+    name: str | None = None,
+) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
     """Record duration/call/outcome metrics and expose a per-call ``Report``.
 
     The ``Report`` (reachable via ``current_report()``) collects declared

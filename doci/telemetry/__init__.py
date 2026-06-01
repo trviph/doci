@@ -5,6 +5,7 @@ from opentelemetry._logs import set_logger_provider
 from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
 from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.instrumentation.botocore import BotocoreInstrumentor
 from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.metrics import MeterProvider
@@ -45,9 +46,17 @@ set_logger_provider(LOGGER_PROVIDER)
 LOGGING_HANDLER = LoggingHandler(logger_provider=LOGGER_PROVIDER)
 logging.getLogger().addHandler(LOGGING_HANDLER)
 
+# Auto-instrument botocore/boto3 so every AWS/S3 call emits low-level client spans
+# bound to our providers (complements the higher-level @with_span on ObjStore).
+BotocoreInstrumentor().instrument(
+    tracer_provider=TRACER_PROVIDER,
+    meter_provider=METER_PROVIDER,
+)
+
 
 def shutdown() -> None:
     """Flush and close all telemetry providers. Call on application shutdown."""
+    BotocoreInstrumentor().uninstrument()
     TRACER_PROVIDER.shutdown()
     METER_PROVIDER.shutdown()
     LOGGER_PROVIDER.shutdown()
