@@ -60,13 +60,17 @@ class Transaction:
 
     @with_span(kind=SpanKind.CLIENT)
     @with_metrics()
-    async def fetch_all(self, query: str, params: _Params = None) -> list[dict[str, Any]]:
+    async def fetch_all(
+        self, query: str, params: _Params = None
+    ) -> list[dict[str, Any]]:
         _annotate()
         return await asyncio.to_thread(_exec, self._conn, query, params, "all")
 
     @with_span(kind=SpanKind.CLIENT)
     @with_metrics()
-    async def fetch_one(self, query: str, params: _Params = None) -> dict[str, Any] | None:
+    async def fetch_one(
+        self, query: str, params: _Params = None
+    ) -> dict[str, Any] | None:
         _annotate()
         return await asyncio.to_thread(_exec, self._conn, query, params, "one")
 
@@ -128,7 +132,9 @@ class Postgres:
     # -- query helpers (auto-commit, one pooled connection each) ---------- #
     @with_span(kind=SpanKind.CLIENT)
     @with_metrics()
-    async def fetch_all(self, query: str, params: _Params = None) -> list[dict[str, Any]]:
+    async def fetch_all(
+        self, query: str, params: _Params = None
+    ) -> list[dict[str, Any]]:
         _annotate()
         rows = await asyncio.to_thread(self._run, query, params, "all")
         current_report().record(PG_ROWS, len(rows))
@@ -136,7 +142,9 @@ class Postgres:
 
     @with_span(kind=SpanKind.CLIENT)
     @with_metrics()
-    async def fetch_one(self, query: str, params: _Params = None) -> dict[str, Any] | None:
+    async def fetch_one(
+        self, query: str, params: _Params = None
+    ) -> dict[str, Any] | None:
         _annotate()
         return await asyncio.to_thread(self._run, query, params, "one")
 
