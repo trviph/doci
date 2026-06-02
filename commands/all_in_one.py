@@ -30,9 +30,7 @@ async def _serve() -> None:
     # Run the receiver as a background task alongside the HTTP server.
     # run_startup=True fires WORKER_STARTUP events; the FastAPI lifespan
     # independently fires CLIENT_STARTUP via broker.startup() in app.py.
-    receiver_task = asyncio.create_task(
-        run_receiver_task(broker, run_startup=True)
-    )
+    receiver_task = asyncio.create_task(run_receiver_task(broker, run_startup=True))
 
     try:
         await server.serve()
