@@ -1,14 +1,12 @@
 name: Tag latest
 
-# Promotes an already-published versioned image to the floating
-# `ghcr.io/<owner>/<repo>:latest` tag.
+# Promotes already-published versioned images to the floating :latest tag.
 #
 # Trigger: a real GitHub Release is published (not just a tag push).
 # Pre-release Releases are skipped, so v1.2.3-rc1 does not move :latest.
 #
-# Uses `docker buildx imagetools create` to alias the existing manifest
-# rather than rebuilding — fast, and preserves whatever variants
-# release.yml pushed.
+# Uses `docker buildx imagetools create` to alias existing manifests rather
+# than rebuilding — fast, and preserves the variants release.yml pushed.
 
 on:
   release:
@@ -33,6 +31,12 @@ jobs:
     # has chosen the tag explicitly, so we trust them.
     if: github.event_name == 'workflow_dispatch' || github.event.release.prerelease == false
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        suffix:
+          - /api
+          - /worker
+          - /all-in-one
     steps:
       - uses: docker/setup-buildx-action@v3
 
@@ -42,16 +46,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Promote versioned image to :latest
+      - name: Promote ${{ matrix.suffix }} to :latest
         env:
-          IMAGE: ghcr.io/${{ github.repository }}
+          IMAGE: ghcr.io/${{ github.repository }}${{ matrix.suffix }}
           TAG_NAME: ${{ inputs.tag || github.event.release.tag_name }}
         run: |
           set -euo pipefail
-          # metadata-action's {{version}} pattern strips the leading `v`,
-          # so the versioned image tag is e.g. `1.2.3` not `v1.2.3`.
           VERSION="${TAG_NAME#v}"
-          echo "Promoting ${IMAGE}:${VERSION} -> ${IMAGE}:latest"
+          echo "Promoting ${IMAGE}:v${VERSION} → ${IMAGE}:latest"
           docker buildx imagetools create \
             --tag "${IMAGE}:latest" \
-            "${IMAGE}:${VERSION}"
+            "${IMAGE}:v${VERSION}"

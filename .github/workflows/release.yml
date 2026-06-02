@@ -1,18 +1,19 @@
 name: Release
 
-# On a semver tag push (v1.2.3, v1.2.3-rc1, ...), build a linux/amd64
-# container image and publish it to GitHub Container Registry.
+# On a semver tag push (v1.2.3, v1.2.3-rc1, ...), build linux/amd64 images
+# for all three service variants and publish them to GitHub Container Registry.
 #
-# Image: ghcr.io/<owner>/<repo>
-# Tags:  the full version, major.minor, and major.
-#        The floating `:latest` tag is owned by tag-latest.yml — it is
-#        only applied when a real GitHub Release is published (not on
-#        every tag push), so tagging-without-releasing never moves
-#        `:latest`.
+# Images
+#   ghcr.io/<owner>/<repo>/api        — API server     (Dockerfile.api)
+#   ghcr.io/<owner>/<repo>/worker     — TaskIQ worker  (Dockerfile.worker)
+#   ghcr.io/<owner>/<repo>/all-in-one — API + worker   (Dockerfile.all_in_one)
 #
-# First push linked to a new repo lands as a private package. To make
-# the image pullable without auth, open the package on github.com and
-# set its visibility to Public once.
+# Build order
+#   1. build-base    : Dockerfile.base → /base:<sha>  (ephemeral; wires variants)
+#   2. build-variants: Dockerfile.{api,worker,all_in_one} in parallel → semver tags
+#
+# The floating :latest tag is owned by tag-latest.yml — applied only on a real
+# GitHub Release, so tagging-without-releasing never moves :latest.
 
 on:
   push:
@@ -33,7 +34,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  publish:
+  build-base:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -48,28 +49,61 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Compute image tags
+      - name: Build and push base
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.base
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/${{ github.repository }}/base:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-variants:
+    needs: build-base
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - suffix: /api
+            file: docker/Dockerfile.api
+          - suffix: /worker
+            file: docker/Dockerfile.worker
+          - suffix: /all-in-one
+            file: docker/Dockerfile.all_in_one
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute tags
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}
-          # Never auto-apply `:latest` here. That tag is moved by
-          # tag-latest.yml on a real Release event.
-          flavor: |
-            latest=false
+          images: ghcr.io/${{ github.repository }}${{ matrix.suffix }}
+          flavor: latest=false
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
+            type=semver,pattern=v{{version}}
+            type=semver,pattern=v{{major}}.{{minor}}
+            type=semver,pattern=v{{major}}
 
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: docker/Dockerfile
+          file: ${{ matrix.file }}
+          build-args: BASE_IMAGE=ghcr.io/${{ github.repository }}/base:${{ github.sha }}
           platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max

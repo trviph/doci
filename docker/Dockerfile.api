@@ -1,0 +1,11 @@
+# syntax=docker/dockerfile:1.9
+#
+# API server image. Build doci-base first, then this image:
+#   docker build -f docker/Dockerfile.base -t doci-base .
+#   docker build -f docker/Dockerfile.api  -t doci-api  .
+ARG BASE_IMAGE=doci-base:latest
+FROM ${BASE_IMAGE}
+ENV HOST=0.0.0.0 \
+    PORT=8000
+EXPOSE 8000
+ENTRYPOINT ["doci-api"]

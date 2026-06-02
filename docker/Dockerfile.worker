@@ -1,0 +1,8 @@
+# syntax=docker/dockerfile:1.9
+#
+# TaskIQ worker image. Build doci-base first, then this image:
+#   docker build -f docker/Dockerfile.base   -t doci-base   .
+#   docker build -f docker/Dockerfile.worker -t doci-worker .
+ARG BASE_IMAGE=doci-base:latest
+FROM ${BASE_IMAGE}
+ENTRYPOINT ["doci-worker"]
