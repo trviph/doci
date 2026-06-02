@@ -52,9 +52,13 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.media = MediaService(
         postgres=pg, objstore=obj, cache=media_cache, config=media_config
     )
+    # Start asyncio runtime metrics (task count + event-loop lag) now that we're
+    # inside the running loop; system/process metrics were registered at import.
+    telemetry.runtime.start_asyncio_metrics()
     try:
         yield
     finally:
+        await telemetry.runtime.stop_asyncio_metrics()
         await kv.aclose()
         obj.close()
         pg.close()
