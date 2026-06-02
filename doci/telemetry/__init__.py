@@ -64,6 +64,16 @@ Psycopg2Instrumentor().instrument(tracer_provider=TRACER_PROVIDER, skip_dep_chec
 # bound to our provider (complements the higher-level @with_span on the KV client).
 RedisInstrumentor().instrument(tracer_provider=TRACER_PROVIDER)
 
+# Auto-instrument taskiq so every broker constructed after this point gets the
+# OpenTelemetryMiddleware injected, emitting send/execute spans and task metrics.
+from taskiq.instrumentation import TaskiqInstrumentor  # noqa: E402
+
+_TASKIQ_INSTRUMENTOR = TaskiqInstrumentor()
+_TASKIQ_INSTRUMENTOR.instrument(
+    tracer_provider=TRACER_PROVIDER,
+    meter_provider=METER_PROVIDER,
+)
+
 # Register process/host runtime metrics (RAM, CPU, threads, file descriptors, GC)
 # against the meter provider set above.
 from doci.telemetry import runtime  # noqa: E402
@@ -76,6 +86,7 @@ def shutdown() -> None:
     BotocoreInstrumentor().uninstrument()
     Psycopg2Instrumentor().uninstrument()
     RedisInstrumentor().uninstrument()
+    _TASKIQ_INSTRUMENTOR.uninstrument()
     runtime.uninstrument()
     TRACER_PROVIDER.shutdown()
     METER_PROVIDER.shutdown()

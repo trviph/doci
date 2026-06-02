@@ -23,6 +23,7 @@ from doci.kvstore import KV, KVConfig
 from doci.media import MediaConfig, MediaService, build_media_router
 from doci.objstore import ObjStore
 from doci.postgres import Postgres
+from doci.taskiq import broker as _taskiq_broker
 
 
 @asynccontextmanager
@@ -31,7 +32,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     pg = Postgres.from_env()
     obj = ObjStore.from_env()
     # All doci KV keys are namespaced under `doci:` (db comes from REDIS_DB/REDIS_URL,
-    # default 0); db 1 is left free for a future Celery broker/result backend.
+    # default 0); db 1 is used by the TaskIQ broker (TASKIQ_BROKER_URL).
     kvcfg = KVConfig.from_env()
     if not kvcfg.key_prefix:
         kvcfg = replace(kvcfg, key_prefix="doci:")
@@ -52,6 +53,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.media = MediaService(
         postgres=pg, objstore=obj, cache=media_cache, config=media_config
     )
+    await _taskiq_broker.startup()
     # Start asyncio runtime metrics (task count + event-loop lag) now that we're
     # inside the running loop; system/process metrics were registered at import.
     telemetry.runtime.start_asyncio_metrics()
@@ -59,6 +61,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         await telemetry.runtime.stop_asyncio_metrics()
+        await _taskiq_broker.shutdown()
         await kv.aclose()
         obj.close()
         pg.close()
