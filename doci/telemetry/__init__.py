@@ -64,12 +64,19 @@ Psycopg2Instrumentor().instrument(tracer_provider=TRACER_PROVIDER, skip_dep_chec
 # bound to our provider (complements the higher-level @with_span on the KV client).
 RedisInstrumentor().instrument(tracer_provider=TRACER_PROVIDER)
 
+# Register process/host runtime metrics (RAM, CPU, threads, file descriptors, GC)
+# against the meter provider set above.
+from doci.telemetry import runtime  # noqa: E402
+
+runtime.instrument()
+
 
 def shutdown() -> None:
     """Flush and close all telemetry providers. Call on application shutdown."""
     BotocoreInstrumentor().uninstrument()
     Psycopg2Instrumentor().uninstrument()
     RedisInstrumentor().uninstrument()
+    runtime.uninstrument()
     TRACER_PROVIDER.shutdown()
     METER_PROVIDER.shutdown()
     LOGGER_PROVIDER.shutdown()
