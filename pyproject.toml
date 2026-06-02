@@ -23,6 +23,7 @@ dependencies = [
     "pymupdf>=1.27.2.3",
     "redis[hiredis]>=8.0.0",
     "ruff>=0.15.15",
+    "taskiq[opentelemetry]>=0.12.4",
     "uvicorn>=0.48.0",
 ]
 
