@@ -30,6 +30,7 @@ dependencies = [
 ]
 
 [project.scripts]
+doci-all-in-one = "commands.all_in_one:main"
 doci-api = "commands.api:main"
 doci-worker = "commands.worker:main"
 
