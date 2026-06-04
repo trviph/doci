@@ -142,6 +142,14 @@ class MediaService:
         )
         return await self._fetch(media_id, include_deleted=True)
 
+    @with_span(kind=SpanKind.CLIENT)
+    @with_metrics()
+    async def download(self, media_id: UUID) -> bytes:
+        """Download a media object's full body as bytes."""
+        _annotate(media_id)
+        rec = await self._fetch(media_id)
+        return await self._obj.download(rec.object_key)
+
     # endregion
 
     # region views
