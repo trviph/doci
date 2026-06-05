@@ -6,6 +6,9 @@ nesting). Source-agnostic — the caller renders a PDF page (or, later, a DOCX
 graphic) to an image first.
 """
 
+from collections.abc import Sequence
+from typing import Literal
+
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import SystemMessage
 from opentelemetry.trace import SpanKind
@@ -35,6 +38,25 @@ class VisualElement(BaseModel):
     )
 
 
+class Fact(BaseModel):
+    """A discrete, audit-relevant value the image asserts or shows.
+
+    Extracted at annotation time so a later compare step can match facts against
+    requirements without re-reading the image.
+    """
+
+    subject: str = Field(
+        description="what the fact is about — a short attribute name, e.g. title, date, quantity, price"
+    )
+    value: str = Field(description="the value as found, e.g. blue, present, 1043, 1200x600")
+    evidence: Literal["stated", "visual"] = Field(
+        description="stated = printed as text/number on the page; visual = seen in the image"
+    )
+    source: str = Field(
+        description="verbatim quote or short locator for where this came from"
+    )
+
+
 class ImageAnnotation(BaseModel):
     """Annotation of an image as a whole plus a flat list of its visual elements."""
 
@@ -49,6 +71,32 @@ class ImageAnnotation(BaseModel):
         default_factory=list,
         description="all distinct visual elements on the image (flat, not nested)",
     )
+    facts: list[Fact] = Field(
+        default_factory=list,
+        description="discrete audit-relevant facts the image asserts or shows (flat)",
+    )
+
+
+class FieldSpec(BaseModel):
+    """A field the caller wants extracted from the image, if present."""
+
+    name: str = Field(
+        description="attribute name to extract; becomes the fact's subject"
+    )
+    hint: str | None = Field(
+        default=None, description="optional note on what to look for or where"
+    )
+
+
+def _user_prompt(fields: Sequence[FieldSpec] | None) -> str:
+    """The per-call user instruction, with an optional 'fields to look for' list."""
+    prompt = "Annotate this image."
+    if fields:
+        lines = "\n".join(
+            f"- {f.name}: {f.hint}" if f.hint else f"- {f.name}" for f in fields
+        )
+        prompt += f"\n\nFields to look for (extract into facts if present):\n{lines}"
+    return prompt
 
 
 @traced
@@ -60,8 +108,14 @@ class AnnotateImage:
 
     @with_span(kind=SpanKind.INTERNAL)
     @with_metrics()
-    async def __call__(self, image: bytes) -> ImageAnnotation:
-        """Return a structured annotation of the ``image`` (PNG/JPEG bytes)."""
+    async def __call__(
+        self, image: bytes, fields: Sequence[FieldSpec] | None = None
+    ) -> ImageAnnotation:
+        """Return a structured annotation of the ``image`` (PNG/JPEG bytes).
+
+        ``fields`` is an optional watchlist of attributes the caller wants
+        extracted into ``facts`` when present on the image.
+        """
         return await self._model.ainvoke(
-            [SystemMessage(_SYSTEM), image_message("Annotate this image.", image)]
+            [SystemMessage(_SYSTEM), image_message(_user_prompt(fields), image)]
         )
