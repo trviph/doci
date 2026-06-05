@@ -1,5 +1,6 @@
 """Activities — pure units of work, free of orchestration concerns."""
 
+from doci.activities.create_thumb_excel import CreateThumbExcel
 from doci.activities.create_thumb_pdf import CreateThumbPdf
 from doci.activities.download_media import DownloadMedia
 from doci.activities.extract_content_excel import ExcelPage, ExtractContentExcel
@@ -14,6 +15,7 @@ __all__ = [
     "ExcelPage",
     "ExtractContentPdfPlain",
     "CreateThumbPdf",
+    "CreateThumbExcel",
     "DownloadMedia",
     "UploadMedia",
     "SplitPdf",
