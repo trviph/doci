@@ -11,6 +11,12 @@ from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass
 
 import pymupdf
+from opentelemetry import trace
+from opentelemetry.trace import SpanKind
+
+from doci.telemetry import traced
+
+_DEFAULT_TRACER = trace.get_tracer("doci.activities")
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,12 +31,24 @@ class PdfPage:
     has_annotations: bool  # an overlay/annotation is present
 
 
+@traced
 class SplitPdf:
     """Split a PDF and yield each page as a standalone single-page PDF."""
 
     async def __call__(self, data: bytes) -> AsyncIterator[PdfPage]:
-        for page in self._iter_pages(data):
-            yield page
+        # Manual span (not @with_span): this is an async generator, which the
+        # decorators don't handle — see ObjStore.stream for the same pattern.
+        tracer = getattr(self, "__otel_tracer__", None) or _DEFAULT_TRACER
+        with tracer.start_as_current_span(
+            "SplitPdf.__call__", kind=SpanKind.INTERNAL
+        ) as span:
+            pages = 0
+            try:
+                for page in self._iter_pages(data):
+                    pages += 1
+                    yield page
+            finally:
+                span.set_attribute("doci.activity.pages", pages)
 
     def _iter_pages(self, data: bytes) -> Iterator[PdfPage]:
         src = pymupdf.open(stream=data, filetype="pdf")

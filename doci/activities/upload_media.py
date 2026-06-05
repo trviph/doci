@@ -1,8 +1,12 @@
 from uuid import UUID
 
+from opentelemetry.trace import SpanKind
+
 from doci.media import MediaRecord, MediaService, MediaType
+from doci.telemetry import traced, with_metrics, with_span
 
 
+@traced
 class UploadMedia:
     """Upload preprocessed media (split pages, thumbnails, ...) through the
     injected `MediaService`, returning the stored record."""
@@ -10,6 +14,8 @@ class UploadMedia:
     def __init__(self, media: MediaService) -> None:
         self._media = media
 
+    @with_span(kind=SpanKind.INTERNAL)
+    @with_metrics()
     async def __call__(
         self,
         data: bytes,

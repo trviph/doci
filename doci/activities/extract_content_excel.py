@@ -12,6 +12,12 @@ from typing import Any
 
 import openpyxl
 from openpyxl.worksheet.worksheet import Worksheet
+from opentelemetry import trace
+from opentelemetry.trace import SpanKind
+
+from doci.telemetry import traced
+
+_DEFAULT_TRACER = trace.get_tracer("doci.activities")
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +47,7 @@ def _row_md(cells: list[str], width: int) -> str:
     return "| " + " | ".join(padded) + " |"
 
 
+@traced
 class ExtractContentExcel:
     """Parse an .xlsx and yield it as paginated Markdown tables."""
 
@@ -48,8 +55,19 @@ class ExtractContentExcel:
         self._max_rows = max(1, max_rows_per_page)
 
     async def __call__(self, data: bytes) -> AsyncIterator[ExcelPage]:
-        for page in self._iter_pages(data):
-            yield page
+        # Manual span (not @with_span): this is an async generator, which the
+        # decorators don't handle — see ObjStore.stream for the same pattern.
+        tracer = getattr(self, "__otel_tracer__", None) or _DEFAULT_TRACER
+        with tracer.start_as_current_span(
+            "ExtractContentExcel.__call__", kind=SpanKind.INTERNAL
+        ) as span:
+            pages = 0
+            try:
+                for page in self._iter_pages(data):
+                    pages += 1
+                    yield page
+            finally:
+                span.set_attribute("doci.activity.pages", pages)
 
     def _iter_pages(self, data: bytes) -> Iterator[ExcelPage]:
         wb = openpyxl.load_workbook(io.BytesIO(data), read_only=True, data_only=True)
