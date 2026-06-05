@@ -1,20 +1,17 @@
-"""Activity: extract an .xlsx media into paginated Markdown tables.
+"""Activity: extract an .xlsx workbook into paginated Markdown tables.
 
-Downloads the stored workbook, then yields it sheet by sheet as GitHub-flavored
-Markdown tables, paginated to at most ``max_rows_per_page`` data rows per page.
-Each page repeats its sheet's header row so it stands alone.
+Yields the workbook sheet by sheet as GitHub-flavored Markdown tables,
+paginated to at most ``max_rows_per_page`` data rows per page. Each page
+repeats its sheet's header row so it stands alone.
 """
 
 import io
 from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass
 from typing import Any
-from uuid import UUID
 
 import openpyxl
 from openpyxl.worksheet.worksheet import Worksheet
-
-from doci.media import MediaService
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,16 +42,12 @@ def _row_md(cells: list[str], width: int) -> str:
 
 
 class ExtractContentExcel:
-    """Download an .xlsx media and yield it as paginated Markdown tables."""
+    """Parse an .xlsx and yield it as paginated Markdown tables."""
 
-    def __init__(self, media: MediaService, *, max_rows_per_page: int = 100) -> None:
-        self._media = media
+    def __init__(self, *, max_rows_per_page: int = 100) -> None:
         self._max_rows = max(1, max_rows_per_page)
 
-    async def __call__(self, media_id: UUID) -> AsyncIterator[ExcelPage]:
-        # openpyxl needs the full, seekable file (an .xlsx is a zip whose central
-        # directory sits at the end), so download the whole object before parsing.
-        data = await self._media.download(media_id)
+    async def __call__(self, data: bytes) -> AsyncIterator[ExcelPage]:
         for page in self._iter_pages(data):
             yield page
 
