@@ -23,6 +23,7 @@ dependencies = [
     "opentelemetry-semantic-conventions>=0.63b1",
     "psycopg2-binary>=2.9.12",
     "pymupdf>=1.27.2.3",
+    "pymupdf4llm>=1.27.2.3",
     "redis[hiredis]>=7.0.0",
     "ruff>=0.15.15",
     "taskiq-redis>=1.2.2",
