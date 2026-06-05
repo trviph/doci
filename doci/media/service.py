@@ -13,6 +13,7 @@ from opentelemetry.trace import SpanKind, get_current_span
 from psycopg2.extras import register_uuid
 
 from doci.cache import Cache
+from doci.helpers import internal
 from doci.media.config import MediaConfig
 from doci.media.mime import (
     HEADER_LEN,
@@ -149,6 +150,46 @@ class MediaService:
         _annotate(media_id)
         rec = await self._fetch(media_id)
         return await self._obj.download(rec.object_key)
+
+    @internal
+    @with_span(kind=SpanKind.CLIENT)
+    @with_metrics()
+    async def upload(
+        self,
+        data: bytes,
+        *,
+        name: str | None = None,
+        parent_id: UUID | None = None,
+        type: MediaType = MediaType.ORIGINAL,
+        mime_type: str | None = None,
+    ) -> MediaRecord:
+        """Store ``data`` as a new, already-finalized media row.
+
+        For trusted, server-generated content (split pages, thumbnails). Uploads
+        the bytes, then inserts a READY row. MIME is auto-detected, falling back
+        to ``mime_type``. Internal-only: never call this from an HTTP request.
+        """
+        mid = uuid4()
+        object_key = f"{MediaType(type).key_prefix}/{mid}"
+        _annotate(mid)
+        mime = detect_mime(data, filename=name) or mime_type
+        await self._obj.upload(object_key, data, content_type=mime)
+        await self._pg.execute(
+            "INSERT INTO media "
+            "(id, parent_id, type, object_key, name, mime_type, size_bytes, status) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+            [
+                mid,
+                parent_id,
+                int(type),
+                object_key,
+                name,
+                mime,
+                len(data),
+                int(MediaStatus.READY),
+            ],
+        )
+        return await self._fetch(mid)
 
     # endregion
 

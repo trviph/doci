@@ -195,6 +195,30 @@ class ObjStore:
         finally:
             body.close()
 
+    @with_span(kind=SpanKind.CLIENT)
+    @with_metrics()
+    async def upload(
+        self,
+        key: str,
+        data: bytes,
+        *,
+        bucket: str | None = None,
+        content_type: str | None = None,
+    ) -> None:
+        """Upload ``data`` to ``key`` (server-side ``put_object``)."""
+        b = self._bucket(bucket)
+        self._annotate(b, key)
+        await asyncio.to_thread(self._upload_sync, b, key, data, content_type)
+        current_report().record(OBJSTORE_BYTES, len(data), direction="up")
+
+    def _upload_sync(
+        self, bucket: str, key: str, data: bytes, content_type: str | None
+    ) -> None:
+        params: dict[str, Any] = {"Bucket": bucket, "Key": key, "Body": data}
+        if content_type:
+            params["ContentType"] = content_type
+        self._s3.put_object(**params)
+
     async def stream(
         self, key: str, *, bucket: str | None = None, chunk_size: int = 65536
     ) -> AsyncIterator[bytes]:

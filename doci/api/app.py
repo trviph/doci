@@ -10,7 +10,8 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import replace
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
+from fastapi.responses import JSONResponse
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
 # Importing doci.telemetry registers the OTel providers + library instrumentation
@@ -19,6 +20,7 @@ from doci import telemetry
 from doci.cache import Cache, CacheMode
 from doci.globals import SERVICE_VERSION
 from doci.health import HealthService, build_health_router
+from doci.helpers import HttpRequestContextMiddleware, InternalAccessError
 from doci.kvstore import KV, KVConfig
 from doci.media import MediaConfig, MediaService, build_media_router
 from doci.objstore import ObjStore
@@ -71,6 +73,18 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 def create_app() -> FastAPI:
     """Build and return the FastAPI application."""
     app = FastAPI(title="DocI", version=SERVICE_VERSION, lifespan=_lifespan)
+    # Flag HTTP scopes so `@internal` service methods refuse to run during a
+    # request; surface any leak as 403 rather than a 500.
+    app.add_middleware(HttpRequestContextMiddleware)
+
+    @app.exception_handler(InternalAccessError)
+    async def _forbid_internal(
+        _request: Request, _exc: InternalAccessError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN, content={"detail": "forbidden"}
+        )
+
     app.include_router(build_health_router())
     app.include_router(build_media_router())
     FastAPIInstrumentor.instrument_app(
