@@ -30,8 +30,12 @@ class TextFact(BaseModel):
     subject: str = Field(
         description="what the fact is about — a short attribute name, e.g. title, date, quantity, price"
     )
-    value: str = Field(description="the value as found, e.g. 2026-06-05, present, 1043, $1,200")
-    source: str = Field(description="verbatim quote of the relevant text from the document")
+    value: str = Field(
+        description="the value as found, e.g. 2026-06-05, present, 1043, $1,200"
+    )
+    source: str = Field(
+        description="verbatim quote of the relevant text from the document"
+    )
 
 
 class TextAnnotation(BaseModel):
