@@ -5,6 +5,11 @@ from doci.activities.annotate_image import (
     ImageAnnotation,
     VisualElement,
 )
+from doci.activities.annotate_text import (
+    AnnotateText,
+    TextAnnotation,
+    TextFact,
+)
 from doci.activities.create_thumb_excel import CreateThumbExcel
 from doci.activities.create_thumb_pdf import CreateThumbPdf
 from doci.activities.download_media import DownloadMedia
@@ -24,6 +29,9 @@ __all__ = [
     "AnnotateImage",
     "ImageAnnotation",
     "VisualElement",
+    "AnnotateText",
+    "TextAnnotation",
+    "TextFact",
     "CreateThumbPdf",
     "CreateThumbExcel",
     "DownloadMedia",
