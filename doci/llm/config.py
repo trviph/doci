@@ -33,7 +33,7 @@ class LLMConfig:
 
     @classmethod
     def from_env(cls, task: str, *, default_model: str) -> "LLMConfig":
-        """Resolve config for ``task`` (e.g. "EXTRACT_PDF_GRAPHIC", "SUMMARIZE").
+        """Resolve config for ``task`` (e.g. "EXTRACT_IMAGE", "ANNOTATE_IMAGE").
 
         Per field: ``DOCI_LLM_<TASK>_<FIELD>`` -> ``DOCI_LLM_<FIELD>`` -> default.
         """

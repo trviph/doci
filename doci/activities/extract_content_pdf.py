@@ -1,11 +1,10 @@
-"""Activity: extract a pure-text PDF page's content as Markdown (non-LLM).
+"""Activity: extract a PDF's text-layer content as Markdown.
 
 Uses ``pymupdf4llm`` (the PyMuPDF project's mupdf-based extractor, with its
 in-process ML layout) to render the document as GitHub-flavored Markdown —
 headings, lists, tables, code — rather than flat text. Expects a page with an
-extractable text layer and no images/annotations (the classify stage routes
-scanned/visual pages elsewhere). An LLM-based ``extract_content_pdf_*`` sibling is
-planned for those.
+extractable text layer; image/scanned pages are rendered to an image and handled
+by ``extract_content_image`` (vision LLM) instead.
 """
 
 import pymupdf
@@ -16,8 +15,8 @@ from doci.telemetry import traced, with_metrics, with_span
 
 
 @traced
-class ExtractContentPdfPlain:
-    """Extract a PDF (bytes) into a single Markdown string, without an LLM."""
+class ExtractContentPdf:
+    """Extract a PDF (bytes) into a single Markdown string from its text layer."""
 
     @with_span(kind=SpanKind.INTERNAL)
     @with_metrics()
