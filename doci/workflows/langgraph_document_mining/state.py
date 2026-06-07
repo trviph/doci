@@ -9,7 +9,16 @@ from enum import Enum
 from typing import TypedDict
 from uuid import UUID
 
-from doci.media.mime import MIME_PDF, MIME_XLSX
+from doci.media.mime import (
+    MIME_BMP,
+    MIME_GIF,
+    MIME_JPEG,
+    MIME_PDF,
+    MIME_PNG,
+    MIME_TIFF,
+    MIME_WEBP,
+    MIME_XLSX,
+)
 
 
 class DocumentType(str, Enum):
@@ -17,6 +26,7 @@ class DocumentType(str, Enum):
 
     EXCEL = "excel"
     PDF = "pdf"
+    IMAGE = "image"
 
 
 # MIME type -> supported DocumentType. Constants come from doci.media.mime so the
@@ -24,6 +34,12 @@ class DocumentType(str, Enum):
 _BY_MIME: dict[str, DocumentType] = {
     MIME_PDF: DocumentType.PDF,
     MIME_XLSX: DocumentType.EXCEL,
+    MIME_PNG: DocumentType.IMAGE,
+    MIME_JPEG: DocumentType.IMAGE,
+    MIME_GIF: DocumentType.IMAGE,
+    MIME_WEBP: DocumentType.IMAGE,
+    MIME_BMP: DocumentType.IMAGE,
+    MIME_TIFF: DocumentType.IMAGE,
 }
 
 

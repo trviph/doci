@@ -8,37 +8,35 @@ there, builds the graph, and runs it for a single media.
 
 from uuid import UUID
 
-from taskiq import TaskiqEvents, TaskiqState
-
 from doci.activities import FinalizeMedia
-from doci.bootstrap import Clients, build_clients, close_clients
 from doci.taskiq import broker
 from doci.workflows.langgraph_document_mining.graph import (
     build_document_mining_graph,
 )
-
-#: Attribute under which the shared clients live on ``broker.state``.
-_CLIENTS_ATTR = "doci_clients"
-
-
-@broker.on_event(TaskiqEvents.WORKER_STARTUP)
-async def _build_clients(state: TaskiqState) -> None:
-    setattr(state, _CLIENTS_ATTR, build_clients())
-
-
-@broker.on_event(TaskiqEvents.WORKER_SHUTDOWN)
-async def _close_clients(state: TaskiqState) -> None:
-    clients: Clients | None = getattr(state, _CLIENTS_ATTR, None)
-    if clients is not None:
-        await close_clients(clients)
+from doci.workflows.langgraph_document_mining_image.deps import build_image_graph
+from doci.workflows.runtime import get_clients, get_saver
 
 
 @broker.task
 async def run_document_mining(media_id: str) -> dict:
-    """Finalize + classify ``media_id`` through the document-mining graph."""
-    clients: Clients = getattr(broker.state, _CLIENTS_ATTR)
-    graph = build_document_mining_graph(finalize=FinalizeMedia(clients.media))
-    result = await graph.ainvoke({"media_id": UUID(media_id)})
+    """Finalize + classify ``media_id`` and route it through the mining graph.
+
+    Image originals are processed by the image child subgraph; the run is durable
+    via the shared Valkey checkpointer (thread = the media id).
+    """
+    clients = get_clients()
+    # Image child is embedded as a subgraph — compiled without its own
+    # checkpointer so the parent's checkpointer persists its state too.
+    image_graph = build_image_graph(clients.media)
+    graph = build_document_mining_graph(
+        finalize=FinalizeMedia(clients.media),
+        image_graph=image_graph,
+        checkpointer=get_saver(),
+    )
+    result = await graph.ainvoke(
+        {"media_id": UUID(media_id)},
+        config={"configurable": {"thread_id": str(media_id)}},
+    )
     doc_type = result.get("document_type")
     return {
         "media_id": media_id,
