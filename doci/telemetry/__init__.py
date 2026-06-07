@@ -1,10 +1,13 @@
 import logging
+import os
 
+from openinference.instrumentation import TraceConfig
 from opentelemetry import metrics, trace
 from opentelemetry._logs import set_logger_provider
 from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
 from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from openinference.instrumentation.langchain import LangChainInstrumentor
 from opentelemetry.instrumentation.botocore import BotocoreInstrumentor
 from opentelemetry.instrumentation.psycopg2 import Psycopg2Instrumentor
 from opentelemetry.instrumentation.redis import RedisInstrumentor
@@ -64,6 +67,25 @@ Psycopg2Instrumentor().instrument(tracer_provider=TRACER_PROVIDER, skip_dep_chec
 # bound to our provider (complements the higher-level @with_span on the KV client).
 RedisInstrumentor().instrument(tracer_provider=TRACER_PROVIDER)
 
+# Auto-instrument LangChain/LangGraph (callback-based) so each graph node and LLM
+# call emits a span bound to our provider — complements the @with_span on the
+# activities. Token usage, model name, and timing are always recorded; the raw
+# prompt/response payloads (which are large and may carry PII or base64 images)
+# are redacted unless DOCI_LLM_TRACE_CONTENT is explicitly enabled.
+_TRACE_LLM_CONTENT = os.getenv("DOCI_LLM_TRACE_CONTENT", "").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+_LANGCHAIN_INSTRUMENTOR = LangChainInstrumentor()
+_LANGCHAIN_INSTRUMENTOR.instrument(
+    tracer_provider=TRACER_PROVIDER,
+    config=TraceConfig(
+        hide_inputs=not _TRACE_LLM_CONTENT,
+        hide_outputs=not _TRACE_LLM_CONTENT,
+    ),
+)
+
 # Auto-instrument taskiq so every broker constructed after this point gets the
 # OpenTelemetryMiddleware injected, emitting send/execute spans and task metrics.
 from taskiq.instrumentation import TaskiqInstrumentor  # noqa: E402
@@ -86,6 +108,7 @@ def shutdown() -> None:
     BotocoreInstrumentor().uninstrument()
     Psycopg2Instrumentor().uninstrument()
     RedisInstrumentor().uninstrument()
+    _LANGCHAIN_INSTRUMENTOR.uninstrument()
     _TASKIQ_INSTRUMENTOR.uninstrument()
     runtime.uninstrument()
     TRACER_PROVIDER.shutdown()
