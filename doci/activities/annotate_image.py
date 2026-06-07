@@ -48,7 +48,9 @@ class Fact(BaseModel):
     subject: str = Field(
         description="what the fact is about — a short attribute name, e.g. title, date, quantity, price"
     )
-    value: str = Field(description="the value as found, e.g. blue, present, 1043, 1200x600")
+    value: str = Field(
+        description="the value as found, e.g. blue, present, 1043, 1200x600"
+    )
     evidence: Literal["stated", "visual"] = Field(
         description="stated = printed as text/number on the page; visual = seen in the image"
     )
