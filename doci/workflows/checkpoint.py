@@ -32,7 +32,9 @@ from langgraph.checkpoint.base import (
     get_checkpoint_metadata,
 )
 
+_DEFAULT_URL = "redis://localhost:6379/2"
 _DEFAULT_TTL = 3 * 24 * 60 * 60  # 3 days, in seconds
+_DEFAULT_PREFIX = "doci:ckpt:"
 
 
 def _s(value: Any) -> str:
@@ -44,17 +46,21 @@ def _s(value: Any) -> str:
 class CheckpointConfig:
     """Connection + retention config for the Valkey checkpointer."""
 
-    url: str = "redis://localhost:6379/2"
+    url: str = _DEFAULT_URL
     ttl: int = _DEFAULT_TTL  # seconds; applied to every checkpoint key
-    prefix: str = "doci:ckpt:"
+    prefix: str = _DEFAULT_PREFIX
 
     @classmethod
     def from_env(cls) -> "CheckpointConfig":
-        """Read ``DOCI_CHECKPOINT_REDIS_URL`` / ``DOCI_CHECKPOINT_TTL``."""
+        """Read ``DOCI_CHECKPOINT_REDIS_URL`` / ``DOCI_CHECKPOINT_TTL``.
+
+        Note: defaults reference the module constants, not ``cls.<field>`` — with
+        ``slots=True`` the latter is the slot descriptor, not the default value.
+        """
         return cls(
-            url=os.getenv("DOCI_CHECKPOINT_REDIS_URL", cls.url),
-            ttl=int(os.getenv("DOCI_CHECKPOINT_TTL", str(cls.ttl))),
-            prefix=os.getenv("DOCI_CHECKPOINT_PREFIX", cls.prefix),
+            url=os.getenv("DOCI_CHECKPOINT_REDIS_URL", _DEFAULT_URL),
+            ttl=int(os.getenv("DOCI_CHECKPOINT_TTL", str(_DEFAULT_TTL))),
+            prefix=os.getenv("DOCI_CHECKPOINT_PREFIX", _DEFAULT_PREFIX),
         )
 
 
