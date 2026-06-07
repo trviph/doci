@@ -22,6 +22,7 @@ from doci.health import HealthService, build_health_router
 from doci.helpers import HttpRequestContextMiddleware, InternalAccessError
 from doci.media import build_media_router
 from doci.taskiq import broker as _taskiq_broker
+from doci.workflows.router import build_workflows_router
 
 
 @asynccontextmanager
@@ -65,6 +66,7 @@ def create_app() -> FastAPI:
 
     app.include_router(build_health_router())
     app.include_router(build_media_router())
+    app.include_router(build_workflows_router())
     FastAPIInstrumentor.instrument_app(
         app,
         tracer_provider=telemetry.TRACER_PROVIDER,
