@@ -32,9 +32,7 @@ def route_by_type(state: DocumentMiningState) -> str:
     return _ROUTES.get(state.get("document_type"), "unsupported")
 
 
-def build_document_mining_graph(
-    *, finalize: FinalizeMedia
-) -> CompiledStateGraph:
+def build_document_mining_graph(*, finalize: FinalizeMedia) -> CompiledStateGraph:
     """Build + compile the document-mining graph."""
     g = StateGraph(DocumentMiningState)
     g.add_node("finalize", make_finalize_node(finalize))

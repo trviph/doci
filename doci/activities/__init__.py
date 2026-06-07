@@ -11,6 +11,7 @@ from doci.activities.annotate_text import (
     TextFact,
 )
 from doci.activities.create_thumb_excel import CreateThumbExcel
+from doci.activities.create_thumb_image import CreateThumbImage
 from doci.activities.create_thumb_pdf import CreateThumbPdf
 from doci.activities.download_media import DownloadMedia
 from doci.activities.extract_content_excel import ExcelPage, ExtractContentExcel
@@ -33,6 +34,7 @@ __all__ = [
     "TextAnnotation",
     "TextFact",
     "CreateThumbPdf",
+    "CreateThumbImage",
     "CreateThumbExcel",
     "DownloadMedia",
     "UploadMedia",

@@ -1,12 +1,14 @@
-"""Activity: render a PDF page as a small, content-obfuscated PNG thumbnail.
+"""Activity: render a text-bearing PDF page as a small, obfuscated PNG thumbnail.
 
 Produces a tiny grayscale PNG for listings that hides the page's actual data:
-- Text pages are "blockized" VSCode-minimap style — one gray rectangle per word,
-  so layout shows but words are unreadable.
-- Scanned/image pages (no extractable text) are rendered at very low resolution,
-  a blur/mosaic that conveys the document's shape without legible content.
-Returns the raw PNG bytes (store as a ``MediaType.THUMB`` derivative). First page
-only (inputs are single post-split pages). PyMuPDF only — no Pillow.
+text is "blockized" VSCode-minimap style — one gray rectangle per word, so layout
+shows but words are unreadable. Returns the raw PNG bytes (store as a
+``MediaType.THUMB`` derivative). First page only (inputs are single post-split
+pages). PyMuPDF only — no Pillow.
+
+Expects a page with an extractable text layer; scanned/image pages (no text) are
+rendered to an image and thumbnailed by ``create_thumb_image`` instead. A page
+with no words yields a blank minimap by design — route scanned pages elsewhere.
 """
 
 import pymupdf
@@ -17,14 +19,11 @@ from doci.telemetry import traced, with_metrics, with_span
 
 @traced
 class CreateThumbPdf:
-    """Render a PDF's first page as a small, obfuscated minimap/mosaic PNG."""
+    """Render a PDF's first page as a small, obfuscated minimap PNG."""
 
-    def __init__(
-        self, *, width: int = 160, shade: float = 0.55, scan_width: int = 64
-    ) -> None:
+    def __init__(self, *, width: int = 160, shade: float = 0.55) -> None:
         self._width = max(1, width)  # minimap width (px) for text pages
         self._fill = (shade, shade, shade)  # block gray, 0=black .. 1=white
-        self._scan_width = max(1, scan_width)  # low render width => blur/obfuscate
 
     @with_span(kind=SpanKind.INTERNAL)
     @with_metrics()
@@ -36,8 +35,7 @@ class CreateThumbPdf:
         src = pymupdf.open(stream=data, filetype="pdf")
         try:
             page = src[0]
-            words = page.get_text("words")
-            return self._minimap(page, words) if words else self._mosaic(page)
+            return self._minimap(page, page.get_text("words"))
         finally:
             src.close()
 
@@ -58,12 +56,3 @@ class CreateThumbPdf:
             return thumb.get_pixmap(colorspace=pymupdf.csGRAY).tobytes("png")
         finally:
             out.close()
-
-    def _mosaic(self, page: pymupdf.Page) -> bytes:
-        # No text layer => scanned/image (or blank). Render at very low resolution
-        # so content is blurred/illegible (obfuscated) while shape/tone survive.
-        scale = self._scan_width / page.rect.width
-        pix = page.get_pixmap(
-            matrix=pymupdf.Matrix(scale, scale), colorspace=pymupdf.csGRAY
-        )
-        return pix.tobytes("png")
