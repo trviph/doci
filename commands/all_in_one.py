@@ -17,6 +17,9 @@ import doci.telemetry  # noqa: F401
 from doci.api import create_app
 from doci.taskiq.broker import broker
 
+# Import task modules so their @broker.task / event handlers register on import.
+import doci.workflows.langgraph_document_mining.task  # noqa: F401, E402
+
 
 async def _serve() -> None:
     app = create_app()
