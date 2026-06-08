@@ -13,6 +13,7 @@ class DocumentMiningImageState(TypedDict, total=False):
     """State for the image-mining child graph."""
 
     media_id: UUID  # input (shared with the parent graph)
+    execution_id: UUID  # input (the workflow_execution row; used when saving results)
     thumb_media_id: UUID | None  # set by the thumbnail node
     extract_ref: str | None  # disk path of the extracted Markdown (FIXME: db)
     annotation_ref: str | None  # disk path of the annotation JSON (FIXME: db)

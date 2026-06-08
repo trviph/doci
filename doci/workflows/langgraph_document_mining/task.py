@@ -16,6 +16,7 @@ from doci.workflows.langgraph_document_mining.graph import (
     build_document_mining_graph,
 )
 from doci.workflows.langgraph_document_mining_image.deps import build_image_graph
+from doci.workflows.langgraph_document_mining_pdf.deps import build_pdf_graph
 from doci.workflows.models import WorkflowResult
 from doci.workflows.runtime import final_metadata, get_clients, get_saver
 
@@ -40,16 +41,23 @@ async def run_document_mining(media_id: str, execution_id: str, thread_id: str) 
     await runs.mark_running(eid)
     config = {"configurable": {"thread_id": thread_id}}
     try:
-        # Image child is embedded as a subgraph — compiled without its own
-        # checkpointer so the parent's checkpointer persists its state too.
+        # Child graphs are embedded as structural subgraph nodes — compiled
+        # without their own checkpointer so the parent's checkpointer (below)
+        # persists their state. (build_pdf_graph forwards that None to the image
+        # graph it invokes per page; those per-page runs re-run on a retry, the
+        # same node-granularity the image branch has.)
         image_graph = build_image_graph(clients.media)
+        pdf_graph = build_pdf_graph(clients.media)
         graph = build_document_mining_graph(
             finalize=FinalizeMedia(clients.media),
             image_graph=image_graph,
+            pdf_graph=pdf_graph,
             checkpointer=get_saver(),
         )
         result = await asyncio.wait_for(
-            graph.ainvoke({"media_id": UUID(media_id)}, config=config),
+            graph.ainvoke(
+                {"media_id": UUID(media_id), "execution_id": eid}, config=config
+            ),
             timeout=TIMEOUT_S,
         )
         doc_type = result.get("document_type")

@@ -1,10 +1,10 @@
-"""TaskIQ entry point for the image document-mining child workflow.
+"""TaskIQ entry point for the PDF document-mining child workflow.
 
-Runs standalone for a single **already-READY** image media (the child does not
+Runs standalone for a single **already-READY** PDF media (the child does not
 finalize — that's the parent's job). Durable via the shared Valkey checkpointer
-(thread = the per-execution ``thread_id``). Worker-side clients + checkpointer
-come from :mod:`doci.workflows.runtime`. Lifecycle + result are persisted to
-``workflow_execution`` via ``execution_id``.
+(thread = the per-execution ``thread_id``); per-page image runs get their own
+sub-threads. Lifecycle + result are persisted to ``workflow_execution`` via
+``execution_id``.
 """
 
 import asyncio
@@ -13,7 +13,7 @@ from uuid import UUID
 from doci.media import MediaStatus
 from doci.taskiq import broker
 from doci.taskiq.retry import TaskTimeout
-from doci.workflows.langgraph_document_mining_image.deps import build_image_graph
+from doci.workflows.langgraph_document_mining_pdf.deps import build_pdf_graph
 from doci.workflows.models import WorkflowResult
 from doci.workflows.runtime import final_metadata, get_clients, get_saver
 
@@ -26,11 +26,25 @@ class MediaNotReady(Exception):
     """Raised when the child workflow is asked to mine a non-READY media."""
 
 
+def _page_output(page: dict) -> dict:
+    """JSON-safe view of a per-page result (UUIDs → str)."""
+    thumb = page.get("thumb_media_id")
+    page_media = page.get("page_media_id")
+    return {
+        "page_number": page.get("page_number"),
+        "kind": page.get("kind"),
+        "page_media_id": str(page_media) if page_media is not None else None,
+        "thumb_media_id": str(thumb) if thumb is not None else None,
+        "extract_ref": page.get("extract_ref"),
+        "annotation_ref": page.get("annotation_ref"),
+    }
+
+
 @broker.task(retry_on_error=True, max_retries=MAX_RETRIES)
-async def run_document_mining_image(
+async def run_document_mining_pdf(
     media_id: str, execution_id: str, thread_id: str
 ) -> dict:
-    """Thumbnail + extract + annotate a READY image ``media_id``.
+    """Split + per-page extract/annotate/thumbnail a READY PDF ``media_id``.
 
     Runs under a ``TIMEOUT_S`` budget; failures retry (``MAX_RETRIES``) except a
     timeout, which fails terminally.
@@ -45,7 +59,7 @@ async def run_document_mining_image(
         if rec.status is not MediaStatus.READY:
             raise MediaNotReady(f"{media_id} is {rec.status.name}, expected READY")
 
-        graph = build_image_graph(clients.media, checkpointer=get_saver())
+        graph = build_pdf_graph(clients.media, checkpointer=get_saver())
         result = await asyncio.wait_for(
             graph.ainvoke(
                 {"media_id": mid, "execution_id": eid},
@@ -53,12 +67,10 @@ async def run_document_mining_image(
             ),
             timeout=TIMEOUT_S,
         )
-        thumb = result.get("thumb_media_id")
         output = {
             "media_id": media_id,
-            "thumb_media_id": str(thumb) if thumb is not None else None,
-            "extract_ref": result.get("extract_ref"),
-            "annotation_ref": result.get("annotation_ref"),
+            "page_count": result.get("page_count"),
+            "pages": [_page_output(p) for p in result.get("page_results", [])],
         }
         meta = await final_metadata(runs, eid, thread_id)
         await runs.mark_succeeded(eid, WorkflowResult(output=output), meta)

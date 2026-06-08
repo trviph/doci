@@ -28,7 +28,7 @@ class PdfPage:
     content: bytes  # a complete one-page application/pdf
     text_len: int  # chars of extractable text (whitespace-stripped); ~0 => scanned
     image_count: int  # number of embedded images on the page
-    has_annotations: bool  # an overlay/annotation is present
+    has_annotations: bool  # an overlay is present: markup annotation or form/signature widget
 
 
 @traced
@@ -58,7 +58,13 @@ class SplitPdf:
                 page = src[i]
                 text_len = len(page.get_text().strip())
                 image_count = len(page.get_images())
-                has_annotations = next(page.annots(), None) is not None
+                # page.annots() excludes Widget annotations (form/signature
+                # fields) by design — check page.widgets() too so signed/fillable
+                # pages route to the vision path, not the text-only path.
+                has_annotations = (
+                    next(page.annots(), None) is not None
+                    or next(page.widgets(), None) is not None
+                )
                 dst = pymupdf.open()
                 try:
                     dst.insert_pdf(src, from_page=i, to_page=i)

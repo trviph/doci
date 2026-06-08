@@ -20,6 +20,7 @@ from doci.activities import (
     CreateThumbImage,
     DownloadMedia,
     ExtractContentImage,
+    SaveResult,
     UploadMedia,
 )
 from doci.workflows.langgraph_document_mining_image.nodes import (
@@ -40,13 +41,14 @@ def build_document_mining_image_graph(
     upload: UploadMedia,
     extract: ExtractContentImage,
     annotate: AnnotateImage,
+    save: SaveResult,
     checkpointer: BaseCheckpointSaver | None = None,
 ) -> CompiledStateGraph:
     """Build + compile the image document-mining child graph."""
     g = StateGraph(DocumentMiningImageState)
     g.add_node("thumbnail", make_thumbnail_node(download, create_thumb, upload))
-    g.add_node("extract", make_extract_node(download, extract))
-    g.add_node("annotate", make_annotate_node(download, annotate))
+    g.add_node("extract", make_extract_node(download, extract, save))
+    g.add_node("annotate", make_annotate_node(download, annotate, save))
     g.add_node("done", done_node)
 
     g.add_edge(START, "thumbnail")

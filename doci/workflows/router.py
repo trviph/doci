@@ -17,6 +17,7 @@ from doci.workflows.langgraph_document_mining.task import run_document_mining
 from doci.workflows.langgraph_document_mining_image.task import (
     run_document_mining_image,
 )
+from doci.workflows.langgraph_document_mining_pdf.task import run_document_mining_pdf
 from doci.workflows.models import (
     LangGraphMeta,
     TaskiqMeta,
@@ -31,12 +32,14 @@ class WorkflowKind(str, Enum):
 
     DOCUMENT_MINING = "document_mining"  # parent: finalize → classify → route
     IMAGE = "image"  # child: thumbnail + extract + annotate (requires READY)
+    PDF = "pdf"  # child: split → per-page extract/annotate/thumbnail (requires READY)
 
 
-# Workflow -> the taskiq task that runs it. Both take ``media_id: str``.
+# Workflow -> the taskiq task that runs it. All take ``media_id: str``.
 _TASKS = {
     WorkflowKind.DOCUMENT_MINING: run_document_mining,
     WorkflowKind.IMAGE: run_document_mining_image,
+    WorkflowKind.PDF: run_document_mining_pdf,
 }
 
 

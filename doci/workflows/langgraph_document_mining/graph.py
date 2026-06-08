@@ -1,9 +1,9 @@
 """Compose the document-mining workflow as a LangGraph ``StateGraph``.
 
 Entry node finalizes + classifies; a conditional edge routes by ``DocumentType``
-to the EXCEL / PDF branch (stubs for now) or to a terminal ``unsupported`` node.
-The builder is pure DI: it takes already-constructed activities, like the rest of
-the codebase.
+to the PDF / IMAGE child graphs, the EXCEL stub, or a terminal ``unsupported``
+node. The builder is pure DI: it takes already-constructed activities + the
+compiled child graphs, like the rest of the codebase.
 """
 
 from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -14,7 +14,6 @@ from doci.activities import FinalizeMedia
 from doci.workflows.langgraph_document_mining.nodes import (
     excel_node,
     make_finalize_node,
-    pdf_node,
     unsupported_node,
 )
 from doci.workflows.langgraph_document_mining.state import (
@@ -38,18 +37,19 @@ def build_document_mining_graph(
     *,
     finalize: FinalizeMedia,
     image_graph: CompiledStateGraph,
+    pdf_graph: CompiledStateGraph,
     checkpointer: BaseCheckpointSaver | None = None,
 ) -> CompiledStateGraph:
     """Build + compile the document-mining graph.
 
-    ``image_graph`` is the compiled image child workflow, added directly as the
-    ``image`` node so it shares this graph's ``checkpointer`` (it should be
-    compiled without one of its own).
+    ``image_graph`` / ``pdf_graph`` are the compiled child workflows, added
+    directly as the ``image`` / ``pdf`` nodes so they share this graph's
+    ``checkpointer`` (they should be compiled without one of their own).
     """
     g = StateGraph(DocumentMiningState)
     g.add_node("finalize", make_finalize_node(finalize))
     g.add_node("excel", excel_node)
-    g.add_node("pdf", pdf_node)
+    g.add_node("pdf", pdf_graph)
     g.add_node("image", image_graph)
     g.add_node("unsupported", unsupported_node)
 

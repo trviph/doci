@@ -18,6 +18,8 @@ from doci.activities.extract_content_excel import ExcelPage, ExtractContentExcel
 from doci.activities.extract_content_image import ExtractContentImage
 from doci.activities.extract_content_pdf import ExtractContentPdf
 from doci.activities.finalize_media import FinalizeMedia
+from doci.activities.render_image_pdf import RenderImagePdf
+from doci.activities.save_result_to_disk import SaveResult, SaveResultToDisk
 from doci.activities.split_pdf import PdfPage, SplitPdf
 from doci.activities.upload_media import UploadMedia
 
@@ -40,4 +42,7 @@ __all__ = [
     "UploadMedia",
     "SplitPdf",
     "PdfPage",
+    "RenderImagePdf",
+    "SaveResultToDisk",
+    "SaveResult",
 ]

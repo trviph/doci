@@ -12,6 +12,7 @@ from doci.activities import (
     CreateThumbImage,
     DownloadMedia,
     ExtractContentImage,
+    SaveResultToDisk,
     UploadMedia,
 )
 from doci.activities.annotate_image import LLM_DEFAULT_MODEL as _ANNOTATE_MODEL
@@ -41,5 +42,6 @@ def build_image_graph(
         upload=UploadMedia(media),
         extract=extract,
         annotate=annotate,
+        save=SaveResultToDisk(),
         checkpointer=checkpointer,
     )
