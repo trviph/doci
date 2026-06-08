@@ -15,6 +15,7 @@ import uvicorn
 from taskiq.receiver import Receiver
 
 import doci.telemetry  # noqa: F401
+from commands.worker_mon import create_mon_app
 from doci.api import create_app
 from doci.taskiq.broker import broker
 
@@ -39,31 +40,39 @@ async def _run_receiver(finish: asyncio.Event) -> None:
 
 
 async def _serve() -> None:
-    app = create_app()
-    config = uvicorn.Config(
-        app,
-        host=os.getenv("HOST", "localhost"),
-        port=int(os.getenv("PORT", "8000")),
+    host = os.getenv("HOST", "localhost")
+    server = uvicorn.Server(
+        uvicorn.Config(create_app(), host=host, port=int(os.getenv("PORT", "8000")))
     )
-    server = uvicorn.Server(config)
+    # The dev task monitor shares this process's broker (the API app + receiver
+    # start it), so it must not manage the broker lifecycle itself.
+    mon_server = uvicorn.Server(
+        uvicorn.Config(
+            create_mon_app(manage_broker=False),
+            host=host,
+            port=int(os.getenv("MON_PORT", "8001")),
+        )
+    )
 
-    # Run the HTTP server and the in-process worker together. If either stops —
-    # a clean server shutdown (Ctrl+C) or a worker startup failure — wind down
-    # the other and re-raise any error so the process exits instead of hanging.
+    # Run the HTTP server, the dev monitor, and the in-process worker together. If
+    # any stops — a clean shutdown (Ctrl+C) or a worker startup failure — wind down
+    # the others and re-raise any error so the process exits instead of hanging.
     finish = asyncio.Event()
     receiver_task = asyncio.create_task(_run_receiver(finish), name="taskiq-receiver")
     server_task = asyncio.create_task(server.serve(), name="uvicorn-server")
+    mon_task = asyncio.create_task(mon_server.serve(), name="uvicorn-monitor")
 
     await asyncio.wait(
-        {receiver_task, server_task}, return_when=asyncio.FIRST_COMPLETED
+        {receiver_task, server_task, mon_task}, return_when=asyncio.FIRST_COMPLETED
     )
 
     server.should_exit = True  # ask uvicorn to stop if it's still serving
+    mon_server.should_exit = True
     finish.set()  # ask the receiver to stop if it's still listening
-    await asyncio.gather(receiver_task, server_task, return_exceptions=True)
+    await asyncio.gather(receiver_task, server_task, mon_task, return_exceptions=True)
 
     # Re-raise a worker/server failure so the process crashes instead of hanging.
-    for task in (receiver_task, server_task):
+    for task in (receiver_task, server_task, mon_task):
         if not task.cancelled() and task.exception() is not None:
             raise task.exception()
 

@@ -37,6 +37,7 @@ dependencies = [
 doci-all-in-one = "commands.all_in_one:main"
 doci-api = "commands.api:main"
 doci-worker = "commands.worker:main"
+doci-worker-mon = "commands.worker_mon:main"
 
 [build-system]
 requires = ["hatchling"]
