@@ -1,0 +1,12 @@
+# Keep the build context small and reproducible.
+# (Keep pyproject.toml, uv.lock, README.md, doci/, commands/, migrations/ —
+# README.md is required by the hatchling build, see pyproject `readme`.)
+.git
+.github
+docker
+.venv
+.ruff_cache
+__pycache__/
+**/__pycache__/
+*.pyc
+.DS_Store

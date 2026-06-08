@@ -297,6 +297,79 @@ class MediaService:
         )
         return len(rows)
 
+    @internal
+    @with_span(kind=SpanKind.CLIENT)
+    @with_metrics()
+    async def soft_delete_invalid(self) -> int:
+        """Soft-delete all invalid media (plus descendants). Returns the count.
+
+        Routes every ``INVALID`` row into the normal purge grace window, the same
+        way :meth:`delete` handles a user-requested removal. Idempotent: rows
+        already soft-deleted (``deleted_at IS NOT NULL``) are skipped.
+        """
+        rows = await self._pg.fetch_all(
+            """
+            WITH RECURSIVE subtree(id, depth) AS (
+                SELECT id, 0 FROM media WHERE status = %(invalid)s AND deleted_at IS NULL
+                UNION ALL
+                SELECT m.id, s.depth + 1 FROM media m JOIN subtree s ON m.parent_id = s.id
+                WHERE s.depth < %(max_depth)s
+            )
+            UPDATE media SET deleted_at = now(),
+                             purge_after = now() + %(purge)s * interval '1 second',
+                             updated_at = now()
+            WHERE id IN (SELECT id FROM subtree) AND deleted_at IS NULL
+            RETURNING id
+            """,
+            {
+                "invalid": int(MediaStatus.INVALID),
+                "max_depth": self._cfg.delete_max_depth,
+                "purge": self._cfg.purge_after,
+            },
+        )
+        return len(rows)
+
+    @internal
+    @with_span(kind=SpanKind.CLIENT)
+    @with_metrics()
+    async def purge_expired(self) -> int:
+        """Hard-delete media whose purge deadline has passed; objects first.
+
+        Collects every eligible row (parents *and* children) before deleting
+        anything, so the ``ON DELETE CASCADE`` FK can't drop a child row before we
+        remove its object. Each S3 object is deleted first; the matching DB row is
+        removed only once its object is gone, so a transient store failure simply
+        leaves the row for the next sweep instead of orphaning the object. Returns
+        the number of rows hard-deleted.
+        """
+        rows = await self._pg.fetch_all(
+            "SELECT id, object_key FROM media "
+            "WHERE purge_after IS NOT NULL AND purge_after <= now()"
+        )
+        if not rows:
+            return 0
+
+        span = get_current_span()
+        sem = asyncio.Semaphore(self._cfg.concurrency)
+
+        async def purge_one(row: dict) -> UUID | None:
+            async with sem:
+                try:
+                    await self._obj.delete(row["object_key"])
+                except Exception as exc:  # leave the row for the next sweep
+                    span.record_exception(exc)
+                    return None
+                return row["id"]
+
+        purged = await asyncio.gather(*(purge_one(r) for r in rows))
+        ids = [i for i in purged if i is not None]
+        if not ids:
+            return 0
+        deleted = await self._pg.fetch_all(
+            "DELETE FROM media WHERE id = ANY(%s) RETURNING id", [ids]
+        )
+        return len(deleted)
+
     # endregion
 
     # region internals

@@ -36,6 +36,7 @@ jobs:
         suffix:
           - /api
           - /worker
+          - /scheduler
           - /all-in-one
     steps:
       - uses: docker/setup-buildx-action@v3

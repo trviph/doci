@@ -12,16 +12,19 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 
 import uvicorn
+from taskiq.api import run_scheduler_task
 from taskiq.receiver import Receiver
 
 import doci.telemetry  # noqa: F401
 from commands.worker_mon import create_mon_app
 from doci.api import create_app
+from doci.scheduler import scheduler
 from doci.taskiq.broker import broker
 
 # Import task modules so their @broker.task / event handlers register on import.
 import doci.workflows.langgraph_document_mining.task  # noqa: F401, E402
 import doci.workflows.langgraph_document_mining_image.task  # noqa: F401, E402
+import doci.scheduler.tasks  # noqa: F401, E402  (scheduled maintenance tasks)
 
 
 async def _run_receiver(finish: asyncio.Event) -> None:
@@ -61,18 +64,23 @@ async def _serve() -> None:
     receiver_task = asyncio.create_task(_run_receiver(finish), name="taskiq-receiver")
     server_task = asyncio.create_task(server.serve(), name="uvicorn-server")
     mon_task = asyncio.create_task(mon_server.serve(), name="uvicorn-monitor")
-
-    await asyncio.wait(
-        {receiver_task, server_task, mon_task}, return_when=asyncio.FIRST_COMPLETED
+    # The label-based scheduler kicks the maintenance tasks; it loops forever with
+    # no stop signal, so it's cancelled explicitly during shutdown below.
+    scheduler_task = asyncio.create_task(
+        run_scheduler_task(scheduler), name="taskiq-scheduler"
     )
+    tasks = (receiver_task, server_task, mon_task, scheduler_task)
+
+    await asyncio.wait(set(tasks), return_when=asyncio.FIRST_COMPLETED)
 
     server.should_exit = True  # ask uvicorn to stop if it's still serving
     mon_server.should_exit = True
     finish.set()  # ask the receiver to stop if it's still listening
-    await asyncio.gather(receiver_task, server_task, mon_task, return_exceptions=True)
+    scheduler_task.cancel()  # the scheduler loop only stops on cancellation
+    await asyncio.gather(*tasks, return_exceptions=True)
 
     # Re-raise a worker/server failure so the process crashes instead of hanging.
-    for task in (receiver_task, server_task, mon_task):
+    for task in tasks:
         if not task.cancelled() and task.exception() is not None:
             raise task.exception()
 

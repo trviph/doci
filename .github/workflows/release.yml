@@ -4,13 +4,14 @@ name: Release
 # for all three service variants and publish them to GitHub Container Registry.
 #
 # Images
-#   ghcr.io/<owner>/<repo>/api        — API server     (Dockerfile.api)
-#   ghcr.io/<owner>/<repo>/worker     — TaskIQ worker  (Dockerfile.worker)
-#   ghcr.io/<owner>/<repo>/all-in-one — API + worker   (Dockerfile.all_in_one)
+#   ghcr.io/<owner>/<repo>/api        — API server         (Dockerfile.api)
+#   ghcr.io/<owner>/<repo>/worker     — TaskIQ worker      (Dockerfile.worker)
+#   ghcr.io/<owner>/<repo>/scheduler  — TaskIQ scheduler   (Dockerfile.scheduler)
+#   ghcr.io/<owner>/<repo>/all-in-one — API + worker       (Dockerfile.all_in_one)
 #
 # Build order
 #   1. build-base    : Dockerfile.base → /base:<sha>  (ephemeral; wires variants)
-#   2. build-variants: Dockerfile.{api,worker,all_in_one} in parallel → semver tags
+#   2. build-variants: Dockerfile.{api,worker,scheduler,all_in_one} in parallel → semver tags
 #
 # The floating :latest tag is owned by tag-latest.yml — applied only on a real
 # GitHub Release, so tagging-without-releasing never moves :latest.
@@ -70,6 +71,8 @@ jobs:
             file: docker/Dockerfile.api
           - suffix: /worker
             file: docker/Dockerfile.worker
+          - suffix: /scheduler
+            file: docker/Dockerfile.scheduler
           - suffix: /all-in-one
             file: docker/Dockerfile.all_in_one
     steps:

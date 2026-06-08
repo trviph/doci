@@ -219,6 +219,20 @@ class ObjStore:
             params["ContentType"] = content_type
         self._s3.put_object(**params)
 
+    @with_span(kind=SpanKind.CLIENT)
+    @with_metrics()
+    async def delete(self, key: str, *, bucket: str | None = None) -> None:
+        """Delete ``key`` (server-side ``delete_object``).
+
+        Idempotent: S3 returns success even if the object does not exist.
+        """
+        b = self._bucket(bucket)
+        self._annotate(b, key)
+        await asyncio.to_thread(self._delete_sync, b, key)
+
+    def _delete_sync(self, bucket: str, key: str) -> None:
+        self._s3.delete_object(Bucket=bucket, Key=key)
+
     async def stream(
         self, key: str, *, bucket: str | None = None, chunk_size: int = 65536
     ) -> AsyncIterator[bytes]:
