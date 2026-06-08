@@ -28,7 +28,9 @@ class PdfPage:
     content: bytes  # a complete one-page application/pdf
     text_len: int  # chars of extractable text (whitespace-stripped); ~0 => scanned
     image_count: int  # number of embedded images on the page
-    has_annotations: bool  # an overlay is present: markup annotation or form/signature widget
+    has_annotations: (
+        bool  # an overlay is present: markup annotation or form/signature widget
+    )
 
 
 @traced

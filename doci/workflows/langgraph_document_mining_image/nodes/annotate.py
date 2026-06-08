@@ -21,7 +21,9 @@ def make_annotate_node(
         data = await download(media_id)
         annotation = await annotate(data)
         ref = await save(
-            state["execution_id"], media_id, "annotation.json",
+            state["execution_id"],
+            media_id,
+            "annotation.json",
             annotation.model_dump_json(),
         )
         return {"annotation_ref": ref}

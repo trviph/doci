@@ -46,9 +46,7 @@ def make_split_node(
                 png = await render_image_pdf(page.content)
                 rec = await upload(png, parent_id=media_id, type=MediaType.PAGE)
             pages.append(
-                PageRef(
-                    page_number=page.page_number, kind=kind, page_media_id=rec.id
-                )
+                PageRef(page_number=page.page_number, kind=kind, page_media_id=rec.id)
             )
         return {"pages": pages, "page_count": page_count}
 

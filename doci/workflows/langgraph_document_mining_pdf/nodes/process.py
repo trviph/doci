@@ -53,9 +53,7 @@ def make_process_node(
         markdown = await extract_pdf(data)
         annotation = await annotate_text(markdown)
         thumb = await create_thumb_pdf(data)
-        rec = await upload(
-            thumb, parent_id=page.page_media_id, type=MediaType.THUMB
-        )
+        rec = await upload(thumb, parent_id=page.page_media_id, type=MediaType.THUMB)
         return {
             "page_number": page.page_number,
             "kind": page.kind,
@@ -75,9 +73,7 @@ def make_process_node(
     async def _image_page(page: PageRef, thread_id: str, execution_id: UUID) -> dict:
         res = await image_graph.ainvoke(
             {"media_id": page.page_media_id, "execution_id": execution_id},
-            config={
-                "configurable": {"thread_id": f"{thread_id}:p{page.page_number}"}
-            },
+            config={"configurable": {"thread_id": f"{thread_id}:p{page.page_number}"}},
         )
         return {
             "page_number": page.page_number,
