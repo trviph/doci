@@ -79,6 +79,11 @@ class ValkeySaver(BaseCheckpointSaver[str]):
         self._ttl = ttl
         self._p = prefix
 
+    @property
+    def ttl(self) -> int:
+        """Seconds each checkpoint key lives before self-expiring."""
+        return self._ttl
+
     # region key helpers
     def _cp(self, thread: str, ns: str, cid: str) -> str:
         return f"{self._p}cp:{thread}:{ns}:{cid}"

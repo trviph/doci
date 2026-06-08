@@ -36,6 +36,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         postgres=clients.postgres, objstore=clients.objstore, kv=clients.kv
     )
     app.state.media = clients.media
+    app.state.workflow_runs = clients.workflow_runs
     await _taskiq_broker.startup()
     # Start asyncio runtime metrics (task count + event-loop lag) now that we're
     # inside the running loop; system/process metrics were registered at import.
