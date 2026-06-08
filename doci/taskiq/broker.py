@@ -15,6 +15,7 @@ module so that ``TaskiqInstrumentor`` has already patched
 from taskiq_redis import RedisStreamBroker
 
 from doci.taskiq.config import TaskiqConfig
+from doci.taskiq.retry import RetryUnlessTimeoutMiddleware
 
 _cfg = TaskiqConfig.from_env()
 broker = RedisStreamBroker(
@@ -25,3 +26,7 @@ broker = RedisStreamBroker(
     maxlen=_cfg.stream_maxlen,  # approximate (~) trim on XADD
     unacknowledged_lock_timeout=_cfg.unack_lock_timeout,
 )
+
+# Retry engine only — whether/how many retries is a per-task label
+# (retry_on_error / max_retries); timeouts (TaskTimeout) are never retried.
+broker.add_middlewares(RetryUnlessTimeoutMiddleware())

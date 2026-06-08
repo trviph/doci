@@ -7,24 +7,34 @@ come from :mod:`doci.workflows.runtime`. Lifecycle + result are persisted to
 ``workflow_execution`` via ``execution_id``.
 """
 
+import asyncio
 from uuid import UUID
 
 from doci.media import MediaStatus
 from doci.taskiq import broker
+from doci.taskiq.retry import TaskTimeout
 from doci.workflows.langgraph_document_mining_image.deps import build_image_graph
 from doci.workflows.models import WorkflowResult
 from doci.workflows.runtime import final_metadata, get_clients, get_saver
+
+# Per-task config: a 15-minute time budget; retry every failure except a timeout.
+TIMEOUT_S = 15 * 60
+MAX_RETRIES = 3
 
 
 class MediaNotReady(Exception):
     """Raised when the child workflow is asked to mine a non-READY media."""
 
 
-@broker.task
+@broker.task(retry_on_error=True, max_retries=MAX_RETRIES)
 async def run_document_mining_image(
     media_id: str, execution_id: str, thread_id: str
 ) -> dict:
-    """Thumbnail + extract + annotate a READY image ``media_id``."""
+    """Thumbnail + extract + annotate a READY image ``media_id``.
+
+    Runs under a ``TIMEOUT_S`` budget; failures retry (``MAX_RETRIES``) except a
+    timeout, which fails terminally.
+    """
     mid = UUID(media_id)
     clients = get_clients()
     runs = clients.workflow_runs
@@ -36,9 +46,12 @@ async def run_document_mining_image(
             raise MediaNotReady(f"{media_id} is {rec.status.name}, expected READY")
 
         graph = build_image_graph(clients.media, checkpointer=get_saver())
-        result = await graph.ainvoke(
-            {"media_id": mid},
-            config={"configurable": {"thread_id": thread_id}},
+        result = await asyncio.wait_for(
+            graph.ainvoke(
+                {"media_id": mid},
+                config={"configurable": {"thread_id": thread_id}},
+            ),
+            timeout=TIMEOUT_S,
         )
         thumb = result.get("thumb_media_id")
         output = {
@@ -50,6 +63,12 @@ async def run_document_mining_image(
         meta = await final_metadata(runs, eid, thread_id)
         await runs.mark_succeeded(eid, WorkflowResult(output=output), meta)
         return output
+    except TimeoutError as exc:
+        meta = await final_metadata(runs, eid, thread_id)
+        await runs.mark_failed(
+            eid, WorkflowResult(error=f"timed out after {TIMEOUT_S}s"), meta
+        )
+        raise TaskTimeout(execution_id) from exc
     except Exception as exc:
         meta = await final_metadata(runs, eid, thread_id)
         await runs.mark_failed(eid, WorkflowResult(error=str(exc)), meta)
