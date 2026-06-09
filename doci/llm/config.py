@@ -64,5 +64,7 @@ class LLMConfig:
             timeout=int(_e("TIMEOUT", "60")),
             max_retries=int(_e("MAX_RETRIES", "2")),
             temperature=float(temp) if temp is not None else None,
-            extra_params=json.loads(_e("PARAMS", json.dumps(dict(default_params or {})))),
+            extra_params=json.loads(
+                _e("PARAMS", json.dumps(dict(default_params or {})))
+            ),
         )
