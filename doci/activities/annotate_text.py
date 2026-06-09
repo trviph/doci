@@ -22,6 +22,11 @@ _SYSTEM = load("annotate_text")
 # shared fallback DOCI_LLM_* .
 LLM_TASK = "ANNOTATE_TEXT"
 LLM_DEFAULT_MODEL = "openai:gpt-5-nano-2025-08-07"
+# Annotation is analysis (classify + extract facts), so it gets *some* reasoning
+# ("low"). Keep a generous budget so the structured output never truncates.
+# Env DOCI_LLM_* still overrides.
+LLM_DEFAULT_MAX_TOKENS = 16000
+LLM_DEFAULT_PARAMS = {"reasoning_effort": "low"}
 
 
 class TextFact(BaseModel):

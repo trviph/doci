@@ -18,8 +18,7 @@ from doci.activities import (
     SplitPdf,
     UploadMedia,
 )
-from doci.activities.annotate_text import LLM_DEFAULT_MODEL as _ANNOTATE_MODEL
-from doci.activities.annotate_text import LLM_TASK as _ANNOTATE_TASK
+from doci.activities import annotate_text as _annotate_text
 from doci.llm import build_chat_model
 from doci.media import MediaService
 from doci.workflows.langgraph_document_mining_image.deps import build_image_graph
@@ -37,7 +36,12 @@ def build_pdf_graph(
     runs (invoked imperatively under their own threads) are durable.
     """
     annotate_text = AnnotateText(
-        build_chat_model(_ANNOTATE_TASK, default_model=_ANNOTATE_MODEL)
+        build_chat_model(
+            _annotate_text.LLM_TASK,
+            default_model=_annotate_text.LLM_DEFAULT_MODEL,
+            default_max_tokens=_annotate_text.LLM_DEFAULT_MAX_TOKENS,
+            default_params=_annotate_text.LLM_DEFAULT_PARAMS,
+        )
     )
     image_graph = build_image_graph(media, checkpointer=checkpointer)
     return build_document_mining_pdf_graph(

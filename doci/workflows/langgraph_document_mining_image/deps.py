@@ -15,10 +15,8 @@ from doci.activities import (
     SaveResultToDisk,
     UploadMedia,
 )
-from doci.activities.annotate_image import LLM_DEFAULT_MODEL as _ANNOTATE_MODEL
-from doci.activities.annotate_image import LLM_TASK as _ANNOTATE_TASK
-from doci.activities.extract_content_image import LLM_DEFAULT_MODEL as _EXTRACT_MODEL
-from doci.activities.extract_content_image import LLM_TASK as _EXTRACT_TASK
+from doci.activities import annotate_image as _annotate
+from doci.activities import extract_content_image as _extract
 from doci.llm import build_chat_model
 from doci.media import MediaService
 from doci.workflows.langgraph_document_mining_image.graph import (
@@ -31,10 +29,20 @@ def build_image_graph(
 ) -> CompiledStateGraph:
     """Construct the activities + compile the image child graph."""
     extract = ExtractContentImage(
-        build_chat_model(_EXTRACT_TASK, default_model=_EXTRACT_MODEL)
+        build_chat_model(
+            _extract.LLM_TASK,
+            default_model=_extract.LLM_DEFAULT_MODEL,
+            default_max_tokens=_extract.LLM_DEFAULT_MAX_TOKENS,
+            default_params=_extract.LLM_DEFAULT_PARAMS,
+        )
     )
     annotate = AnnotateImage(
-        build_chat_model(_ANNOTATE_TASK, default_model=_ANNOTATE_MODEL)
+        build_chat_model(
+            _annotate.LLM_TASK,
+            default_model=_annotate.LLM_DEFAULT_MODEL,
+            default_max_tokens=_annotate.LLM_DEFAULT_MAX_TOKENS,
+            default_params=_annotate.LLM_DEFAULT_PARAMS,
+        )
     )
     return build_document_mining_image_graph(
         download=DownloadMedia(media),

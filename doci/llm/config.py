@@ -32,10 +32,19 @@ class LLMConfig:
     )  # model-specific kwargs
 
     @classmethod
-    def from_env(cls, task: str, *, default_model: str) -> "LLMConfig":
+    def from_env(
+        cls,
+        task: str,
+        *,
+        default_model: str,
+        default_max_tokens: int = 4096,
+        default_params: Mapping[str, Any] | None = None,
+    ) -> "LLMConfig":
         """Resolve config for ``task`` (e.g. "EXTRACT_IMAGE", "ANNOTATE_IMAGE").
 
-        Per field: ``DOCI_LLM_<TASK>_<FIELD>`` -> ``DOCI_LLM_<FIELD>`` -> default.
+        Per field: ``DOCI_LLM_<TASK>_<FIELD>`` -> ``DOCI_LLM_<FIELD>`` -> the
+        per-task code default (``default_*`` args), so an activity can ship a
+        sensible MAX_TOKENS / PARAMS while env still overrides.
         """
         t = task.upper()
 
@@ -51,9 +60,9 @@ class LLMConfig:
             model=_e("MODEL", default_model) or default_model,
             base_url=_e("BASE_URL") or os.getenv("OPENAI_BASE_URL"),
             api_key=_e("API_KEY"),  # None => langchain reads OPENAI_API_KEY/etc.
-            max_tokens=int(_e("MAX_TOKENS", "4096")),
+            max_tokens=int(_e("MAX_TOKENS", str(default_max_tokens))),
             timeout=int(_e("TIMEOUT", "60")),
             max_retries=int(_e("MAX_RETRIES", "2")),
             temperature=float(temp) if temp is not None else None,
-            extra_params=json.loads(_e("PARAMS", "{}")),
+            extra_params=json.loads(_e("PARAMS", json.dumps(dict(default_params or {})))),
         )

@@ -20,6 +20,11 @@ _SYSTEM = load("extract_content_image")
 # DOCI_LLM_EXTRACT_IMAGE_* ; shared fallback DOCI_LLM_* .
 LLM_TASK = "EXTRACT_IMAGE"
 LLM_DEFAULT_MODEL = "openai:gpt-5-nano-2025-08-07"
+# gpt-5-nano is a reasoning model: max_tokens covers reasoning + output, so a
+# small budget starves the transcription (blank pages). Give it room and keep
+# reasoning minimal for OCR-style transcription. Env DOCI_LLM_* still overrides.
+LLM_DEFAULT_MAX_TOKENS = 16000
+LLM_DEFAULT_PARAMS = {"reasoning_effort": "minimal"}
 
 
 @traced
