@@ -12,6 +12,7 @@ from doci.kvstore import KV, KVConfig
 from doci.media import MediaConfig, MediaService
 from doci.objstore import ObjStore
 from doci.postgres import Postgres
+from doci.results import WorkflowResultService
 from doci.workflows import WorkflowExecutionService
 
 
@@ -24,6 +25,7 @@ class Clients:
     kv: KV
     media: MediaService
     workflow_runs: WorkflowExecutionService
+    workflow_results: WorkflowResultService
 
 
 def build_clients() -> Clients:
@@ -48,8 +50,14 @@ def build_clients() -> Clients:
         postgres=pg, objstore=obj, cache=media_cache, config=media_config
     )
     workflow_runs = WorkflowExecutionService(postgres=pg)
+    workflow_results = WorkflowResultService(postgres=pg)
     return Clients(
-        postgres=pg, objstore=obj, kv=kv, media=media, workflow_runs=workflow_runs
+        postgres=pg,
+        objstore=obj,
+        kv=kv,
+        media=media,
+        workflow_runs=workflow_runs,
+        workflow_results=workflow_results,
     )
 
 

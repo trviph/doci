@@ -18,6 +18,7 @@ from doci.activities.extract_content_pdf import ExtractContentPdf
 from doci.activities.finalize_media import FinalizeMedia
 from doci.activities.render_image_pdf import RenderImagePdf
 from doci.activities.save_result_to_disk import SaveResult, SaveResultToDisk
+from doci.activities.save_result_to_postgres import SaveResultToPostgres
 from doci.activities.split_pdf import PdfPage, SplitPdf
 from doci.activities.upload_media import UploadMedia
 
@@ -39,5 +40,6 @@ __all__ = [
     "PdfPage",
     "RenderImagePdf",
     "SaveResultToDisk",
+    "SaveResultToPostgres",
     "SaveResult",
 ]
