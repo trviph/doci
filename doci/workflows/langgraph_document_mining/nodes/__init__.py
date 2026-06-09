@@ -5,13 +5,11 @@ from doci.workflows.langgraph_document_mining.nodes.finalize import (
     make_finalize_node,
 )
 from doci.workflows.langgraph_document_mining.nodes.terminal import (
-    excel_node,
     unsupported_node,
 )
 
 __all__ = [
     "make_finalize_node",
     "FinalizeNode",
-    "excel_node",
     "unsupported_node",
 ]

@@ -17,14 +17,12 @@ from doci.media.mime import (
     MIME_PNG,
     MIME_TIFF,
     MIME_WEBP,
-    MIME_XLSX,
 )
 
 
 class DocumentType(str, Enum):
     """A media type this workflow can process."""
 
-    EXCEL = "excel"
     PDF = "pdf"
     IMAGE = "image"
 
@@ -33,7 +31,6 @@ class DocumentType(str, Enum):
 # accepted set stays in sync with upload validation.
 _BY_MIME: dict[str, DocumentType] = {
     MIME_PDF: DocumentType.PDF,
-    MIME_XLSX: DocumentType.EXCEL,
     MIME_PNG: DocumentType.IMAGE,
     MIME_JPEG: DocumentType.IMAGE,
     MIME_GIF: DocumentType.IMAGE,

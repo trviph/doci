@@ -1,9 +1,9 @@
 """Compose the document-mining workflow as a LangGraph ``StateGraph``.
 
 Entry node finalizes + classifies; a conditional edge routes by ``DocumentType``
-to the PDF / IMAGE child graphs, the EXCEL stub, or a terminal ``unsupported``
-node. The builder is pure DI: it takes already-constructed activities + the
-compiled child graphs, like the rest of the codebase.
+to the PDF / IMAGE child graphs, or to a terminal ``unsupported`` node. The
+builder is pure DI: it takes already-constructed activities + the compiled child
+graphs, like the rest of the codebase.
 """
 
 from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -12,7 +12,6 @@ from langgraph.graph.state import CompiledStateGraph
 
 from doci.activities import FinalizeMedia
 from doci.workflows.langgraph_document_mining.nodes import (
-    excel_node,
     make_finalize_node,
     unsupported_node,
 )
@@ -22,7 +21,6 @@ from doci.workflows.langgraph_document_mining.state import (
 )
 
 _ROUTES = {
-    DocumentType.EXCEL: "excel",
     DocumentType.PDF: "pdf",
     DocumentType.IMAGE: "image",
 }
@@ -48,7 +46,6 @@ def build_document_mining_graph(
     """
     g = StateGraph(DocumentMiningState)
     g.add_node("finalize", make_finalize_node(finalize))
-    g.add_node("excel", excel_node)
     g.add_node("pdf", pdf_graph)
     g.add_node("image", image_graph)
     g.add_node("unsupported", unsupported_node)
@@ -58,13 +55,11 @@ def build_document_mining_graph(
         "finalize",
         route_by_type,
         {
-            "excel": "excel",
             "pdf": "pdf",
             "image": "image",
             "unsupported": "unsupported",
         },
     )
-    g.add_edge("excel", END)
     g.add_edge("pdf", END)
     g.add_edge("image", END)
     g.add_edge("unsupported", END)
