@@ -9,7 +9,7 @@ there, builds the graph, and runs it for a single media.
 import asyncio
 from uuid import UUID
 
-from doci.activities import FinalizeMedia
+from doci.activities import FinalizeDocument
 from doci.taskiq import broker
 from doci.taskiq.retry import TaskTimeout
 from doci.workflows.langgraph_document_mining.graph import (
@@ -26,8 +26,10 @@ MAX_RETRIES = 3
 
 
 @broker.task(retry_on_error=True, max_retries=MAX_RETRIES)
-async def run_document_mining(media_id: str, execution_id: str, thread_id: str) -> dict:
-    """Finalize + classify ``media_id`` and route it through the mining graph.
+async def run_document_mining(
+    document_id: str, execution_id: str, thread_id: str
+) -> dict:
+    """Finalize + classify ``document_id`` and route it through the mining graph.
 
     Image originals are processed by the image child subgraph; the run is durable
     via the shared Valkey checkpointer (thread = the per-execution ``thread_id``).
@@ -47,22 +49,22 @@ async def run_document_mining(media_id: str, execution_id: str, thread_id: str) 
         # graph it invokes per page; those per-page runs re-run on a retry, the
         # same node-granularity the image branch has.)
         image_graph = build_image_graph(clients.media)
-        pdf_graph = build_pdf_graph(clients.media)
+        pdf_graph = build_pdf_graph(clients.media, clients.documents)
         graph = build_document_mining_graph(
-            finalize=FinalizeMedia(clients.media),
+            finalize=FinalizeDocument(clients.documents),
             image_graph=image_graph,
             pdf_graph=pdf_graph,
             checkpointer=get_saver(),
         )
         result = await asyncio.wait_for(
             graph.ainvoke(
-                {"media_id": UUID(media_id), "execution_id": eid}, config=config
+                {"document_id": UUID(document_id), "execution_id": eid}, config=config
             ),
             timeout=TIMEOUT_S,
         )
         doc_type = result.get("document_type")
         output = {
-            "media_id": media_id,
+            "document_id": document_id,
             "document_type": doc_type.value if doc_type is not None else None,
             "mime_type": result.get("mime_type"),
             "unsupported_reason": result.get("unsupported_reason"),

@@ -7,6 +7,7 @@ and stored on ``app.state``; these helpers expose them to route handlers via
 
 from fastapi import Request
 
+from doci.documents import DocumentService
 from doci.health import HealthService
 from doci.kvstore import KV
 from doci.media import MediaService
@@ -32,3 +33,7 @@ def get_health(request: Request) -> HealthService:
 
 def get_media(request: Request) -> MediaService:
     return request.app.state.media
+
+
+def get_documents(request: Request) -> DocumentService:
+    return request.app.state.documents

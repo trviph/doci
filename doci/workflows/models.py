@@ -69,17 +69,17 @@ def _iso(value: datetime | None) -> str | None:
 class WorkflowInput:
     """Snapshot of what was submitted to the workflow."""
 
-    media_id: UUID
+    document_id: UUID
     version: str = WORKFLOW_INPUT_VERSION
 
     def to_json(self) -> dict[str, Any]:
-        return {"version": self.version, "media_id": str(self.media_id)}
+        return {"version": self.version, "document_id": str(self.document_id)}
 
     @classmethod
     def from_json(cls, data: dict[str, Any]) -> "WorkflowInput":
         version = data.get("version", WORKFLOW_INPUT_VERSION)
         _require_compatible(version, WORKFLOW_INPUT_VERSION)
-        return cls(media_id=UUID(str(data["media_id"])), version=version)
+        return cls(document_id=UUID(str(data["document_id"])), version=version)
 
 
 @dataclass(frozen=True, slots=True)

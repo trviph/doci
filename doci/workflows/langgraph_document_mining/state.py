@@ -50,8 +50,9 @@ def classify(mime: str | None) -> DocumentType | None:
 class DocumentMiningState(TypedDict, total=False):
     """State threaded through the document-mining graph."""
 
-    media_id: UUID  # input
+    document_id: UUID  # input
     execution_id: UUID  # input (the workflow_execution row; carried to child graphs)
+    media_id: UUID  # the original blob (set by the finalize node; used by children)
     mime_type: str | None  # set by the finalize node
     document_type: DocumentType | None  # set by the finalize node
     unsupported_reason: str | None  # set by the terminal unsupported node

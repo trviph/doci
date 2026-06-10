@@ -10,7 +10,7 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
-from doci.activities import FinalizeMedia
+from doci.activities import FinalizeDocument
 from doci.workflows.langgraph_document_mining.nodes import (
     make_finalize_node,
     unsupported_node,
@@ -33,7 +33,7 @@ def route_by_type(state: DocumentMiningState) -> str:
 
 def build_document_mining_graph(
     *,
-    finalize: FinalizeMedia,
+    finalize: FinalizeDocument,
     image_graph: CompiledStateGraph,
     pdf_graph: CompiledStateGraph,
     checkpointer: BaseCheckpointSaver | None = None,

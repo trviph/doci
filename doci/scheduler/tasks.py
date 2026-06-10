@@ -22,8 +22,8 @@ PURGE_CRON = os.getenv("CRON_MEDIA_PURGE", "30 3 * * *")
 
 @broker.task(schedule=[{"cron": SOFT_DELETE_INVALID_CRON}])
 async def soft_delete_invalid_media() -> dict:
-    """Soft-delete every ``INVALID`` media row into the purge grace window."""
-    n = await get_clients().media.soft_delete_invalid()
+    """Soft-delete every ``INVALID`` document (and its blobs) into the purge window."""
+    n = await get_clients().documents.soft_delete_invalid()
     return {"soft_deleted": n}
 
 

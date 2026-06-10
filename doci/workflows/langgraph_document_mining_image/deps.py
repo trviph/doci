@@ -11,9 +11,9 @@ from doci.activities import (
     AnnotateImage,
     CreateThumbImage,
     DownloadMedia,
+    EnsureThumb,
     ExtractContentImage,
     SaveResultToDisk,
-    UploadMedia,
 )
 from doci.activities import annotate_image as _annotate
 from doci.activities import extract_content_image as _extract
@@ -47,7 +47,7 @@ def build_image_graph(
     return build_document_mining_image_graph(
         download=DownloadMedia(media),
         create_thumb=CreateThumbImage(),
-        upload=UploadMedia(media),
+        ensure_thumb=EnsureThumb(media),
         extract=extract,
         annotate=annotate,
         save=SaveResultToDisk(),
