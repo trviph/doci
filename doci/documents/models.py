@@ -6,7 +6,7 @@ derived region of it (a page today, an arbitrary range later). Both reference
 idempotency key within its document.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from enum import IntEnum
 from typing import Any

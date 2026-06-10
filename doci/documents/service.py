@@ -104,7 +104,7 @@ class DocumentService:
             mime, size = await self._media.validate_object(
                 doc.object_key, name=doc.name
             )
-        except (TooLarge, UnsupportedType):
+        except TooLarge, UnsupportedType:
             await self._set_status(document_id, DocumentStatus.INVALID)
             raise
         async with self._pg.transaction() as tx:
@@ -183,9 +183,7 @@ class DocumentService:
         )
 
     @internal
-    async def set_document_thumb(
-        self, document_id: UUID, thumb_media_id: UUID
-    ) -> None:
+    async def set_document_thumb(self, document_id: UUID, thumb_media_id: UUID) -> None:
         """Record the original's thumbnail blob (idempotent: only sets if unset)."""
         await self._pg.execute(
             "UPDATE document SET thumb_media_id = %s, updated_at = now() "
