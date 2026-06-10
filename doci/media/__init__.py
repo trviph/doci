@@ -1,20 +1,17 @@
-"""Media — upload/finalize/view service over Postgres + ObjStore + Cache."""
+"""Media — pure blob storage over Postgres + ObjStore + Cache.
+
+The document domain (originals, pages, regions, lifecycle) lives in
+:mod:`doci.documents`, which composes the blob primitives exposed here.
+"""
 
 from doci.media.config import MediaConfig
-from doci.media.models import (
-    MediaListPage,
-    MediaRecord,
-    MediaStatus,
-    MediaType,
-    MediaView,
-    UploadIntent,
-)
-from doci.media.router import build_media_router
+from doci.media.models import MediaRecord, MediaView
 from doci.media.service import (
-    AlreadyFinalized,
+    Executor,
     MediaError,
     MediaNotFound,
     MediaService,
+    Render,
     TooLarge,
     UnsupportedType,
 )
@@ -24,14 +21,10 @@ __all__ = [
     "MediaConfig",
     "MediaRecord",
     "MediaView",
-    "MediaListPage",
-    "UploadIntent",
-    "MediaStatus",
-    "MediaType",
     "MediaError",
     "MediaNotFound",
-    "AlreadyFinalized",
     "UnsupportedType",
     "TooLarge",
-    "build_media_router",
+    "Executor",
+    "Render",
 ]
