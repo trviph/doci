@@ -38,7 +38,6 @@ class DocumentRecordModel(BaseModel):
 
     id: UUID
     media_id: UUID
-    thumb_media_id: UUID | None
     name: str | None
     status: int = Field(description="0=new, 1=ready, 2=invalid")
     page_count: int | None

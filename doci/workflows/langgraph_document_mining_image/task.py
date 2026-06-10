@@ -10,7 +10,7 @@ come from :mod:`doci.workflows.runtime`. Lifecycle + result are persisted to
 import asyncio
 from uuid import UUID
 
-from doci.documents import DocumentStatus
+from doci.documents import DocumentStatus, PartKind
 from doci.taskiq import broker
 from doci.taskiq.retry import TaskTimeout
 from doci.workflows.langgraph_document_mining_image.deps import build_image_graph
@@ -47,19 +47,27 @@ async def run_document_mining_image(
                 f"{document_id} is {doc.status.name}, expected READY"
             )
 
+        # A standalone image isn't split: its single "page" is the file itself.
+        part = await clients.documents.ensure_source_part(did, kind=PartKind.IMAGE)
         graph = build_image_graph(clients.media, checkpointer=get_saver())
         result = await asyncio.wait_for(
             graph.ainvoke(
-                {"media_id": doc.media_id, "document_id": did, "execution_id": eid},
+                {
+                    "media_id": doc.media_id,
+                    "part_id": part.id,
+                    "document_id": did,
+                    "execution_id": eid,
+                },
                 config={"configurable": {"thread_id": thread_id}},
             ),
             timeout=TIMEOUT_S,
         )
         thumb = result.get("thumb_media_id")
         if thumb is not None:
-            await clients.documents.set_document_thumb(did, thumb)
+            await clients.documents.set_part_thumb(part.id, thumb)
         output = {
             "document_id": document_id,
+            "part_id": str(part.id),
             "thumb_media_id": str(thumb) if thumb is not None else None,
             "extract_ref": result.get("extract_ref"),
             "annotation_ref": result.get("annotation_ref"),

@@ -5,7 +5,7 @@ Both reference ``media`` for bytes. This service owns the upload/validation
 lifecycle (``status``) and the per-region idempotency keyed by ``locator``:
 
 - :meth:`request_upload` / :meth:`finalize` are the client-facing presign flow.
-- :meth:`ensure_part` / :meth:`set_part_thumb` / :meth:`set_document_thumb` are the
+- :meth:`ensure_part` / :meth:`ensure_source_part` / :meth:`set_part_thumb` are the
   worker-facing, idempotent region/thumbnail recorders (``@internal``).
 
 Multi-statement writes run inside :meth:`Postgres.transaction` so a ``media`` row
@@ -27,6 +27,7 @@ from doci.documents.models import (
     DocumentStatus,
     PartKind,
     UploadIntent,
+    page_locator,
 )
 from doci.helpers import internal
 from doci.media import MediaConfig, MediaRecord, MediaService, Render
@@ -37,7 +38,7 @@ from doci.telemetry import traced, with_metrics, with_span
 
 # document columns + the joined original-blob metadata (object_key/mime/size).
 _DOC_SELECT = (
-    "SELECT d.id, d.media_id, d.thumb_media_id, d.name, d.status, d.page_count, "
+    "SELECT d.id, d.media_id, d.name, d.status, d.page_count, "
     "       d.deleted_at, d.purge_after, d.created_at, d.updated_at, "
     "       m.object_key, m.mime_type, m.size_bytes "
     "FROM document d JOIN media m ON m.id = d.media_id"
@@ -174,21 +175,50 @@ class DocumentService:
         return DocumentPartRecord.from_row(row)
 
     @internal
+    @with_span(kind=SpanKind.CLIENT)
+    @with_metrics()
+    async def ensure_source_part(
+        self, document_id: UUID, *, kind: PartKind
+    ) -> DocumentPartRecord:
+        """Register the original blob itself as the document's single page part.
+
+        For inputs that are not split (a standalone image): the "page" is the file
+        as uploaded, so the part points at ``document.media_id`` — no new blob and
+        no S3 upload. Idempotent on ``(document_id, locator)``. Results and the
+        thumbnail then key on this part, uniform with split PDF pages.
+        """
+        locator = page_locator(1)
+        existing = await self._pg.fetch_one(
+            f"SELECT {_PART_COLS} FROM document_part "
+            "WHERE document_id = %s AND locator = %s",
+            [document_id, locator],
+        )
+        if existing is not None:
+            return DocumentPartRecord.from_row(existing)
+        doc = await self._fetch(document_id)
+        row = await self._pg.fetch_one(
+            f"INSERT INTO document_part "
+            f"(document_id, locator, kind, page_number, media_id) "
+            f"VALUES (%s, %s, %s, 1, %s) "
+            f"ON CONFLICT (document_id, locator) DO NOTHING "
+            f"RETURNING {_PART_COLS}",
+            [document_id, locator, int(kind), doc.media_id],
+        )
+        if row is None:  # raced
+            row = await self._pg.fetch_one(
+                f"SELECT {_PART_COLS} FROM document_part "
+                "WHERE document_id = %s AND locator = %s",
+                [document_id, locator],
+            )
+        return DocumentPartRecord.from_row(row)
+
+    @internal
     async def set_part_thumb(self, part_id: UUID, thumb_media_id: UUID) -> None:
         """Record a region's thumbnail blob (idempotent: only sets if unset)."""
         await self._pg.execute(
             "UPDATE document_part SET thumb_media_id = %s, updated_at = now() "
             "WHERE id = %s AND thumb_media_id IS NULL",
             [thumb_media_id, part_id],
-        )
-
-    @internal
-    async def set_document_thumb(self, document_id: UUID, thumb_media_id: UUID) -> None:
-        """Record the original's thumbnail blob (idempotent: only sets if unset)."""
-        await self._pg.execute(
-            "UPDATE document SET thumb_media_id = %s, updated_at = now() "
-            "WHERE id = %s AND thumb_media_id IS NULL",
-            [thumb_media_id, document_id],
         )
 
     @internal
@@ -231,11 +261,21 @@ class DocumentService:
     @with_span(kind=SpanKind.CLIENT)
     @with_metrics()
     async def get_view(self, document_id: UUID) -> MediaView:
-        """Presigned view URLs for the original + its pages."""
+        """Presigned view URLs for the original + its page regions.
+
+        Head is the original blob; children are the page parts. A standalone
+        image's single part *is* the original (same blob), so it's excluded from
+        the children to avoid showing the same blob twice.
+        """
         _annotate(document_id)
         doc = await self._fetch(document_id)
         parts = await self._parts(document_id)
-        media_ids = [doc.media_id, *(p.media_id for p in parts if p.media_id)]
+        page_ids = [
+            p.media_id
+            for p in parts
+            if p.media_id and p.media_id != doc.media_id
+        ]
+        media_ids = [doc.media_id, *page_ids]
         by_id = await self._media.get_many(media_ids)
         records = [by_id[mid] for mid in media_ids if mid in by_id]
         return await self._view(records)
@@ -243,20 +283,18 @@ class DocumentService:
     @with_span(kind=SpanKind.CLIENT)
     @with_metrics()
     async def get_view_thumb(self, document_id: UUID) -> MediaView:
-        """Presigned view URLs for the thumb of the original + each page."""
+        """Presigned view URLs for each page region's thumbnail (head = first).
+
+        Thumbnails are inherently per-region: a PDF yields one per page, a
+        standalone image one for its single part. Raises if no thumbnail exists.
+        """
         _annotate(document_id)
-        doc = await self._fetch(document_id)
-        if doc.thumb_media_id is None:
-            raise DocumentNotFound(f"no thumbnail for {document_id}")
         parts = await self._parts(document_id)
-        thumb_ids = [
-            doc.thumb_media_id,
-            *(p.thumb_media_id for p in parts if p.thumb_media_id),
-        ]
+        thumb_ids = [p.thumb_media_id for p in parts if p.thumb_media_id]
         by_id = await self._media.get_many(thumb_ids)
-        if doc.thumb_media_id not in by_id:
-            raise DocumentNotFound(f"no thumbnail for {document_id}")
         records = [by_id[tid] for tid in thumb_ids if tid in by_id]
+        if not records:
+            raise DocumentNotFound(f"no thumbnail for {document_id}")
         return await self._view(records)
 
     # endregion
@@ -273,12 +311,11 @@ class DocumentService:
             await tx.execute(
                 """
                 WITH docs AS (
-                    SELECT id, media_id, thumb_media_id FROM document
+                    SELECT id, media_id FROM document
                     WHERE id = ANY(%(ids)s) AND deleted_at IS NULL
                 ),
                 blob_ids AS (
                     SELECT media_id AS id FROM docs WHERE media_id IS NOT NULL
-                    UNION SELECT thumb_media_id FROM docs WHERE thumb_media_id IS NOT NULL
                     UNION SELECT media_id FROM document_part
                         WHERE document_id IN (SELECT id FROM docs) AND media_id IS NOT NULL
                     UNION SELECT thumb_media_id FROM document_part

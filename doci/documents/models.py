@@ -44,7 +44,6 @@ class DocumentRecord:
 
     id: UUID
     media_id: UUID
-    thumb_media_id: UUID | None
     name: str | None
     status: DocumentStatus
     page_count: int | None
@@ -61,7 +60,6 @@ class DocumentRecord:
         return cls(
             id=row["id"],
             media_id=row["media_id"],
-            thumb_media_id=row["thumb_media_id"],
             name=row["name"],
             status=DocumentStatus(row["status"]),
             page_count=row["page_count"],

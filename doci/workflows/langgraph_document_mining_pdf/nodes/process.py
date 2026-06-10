@@ -67,11 +67,11 @@ def make_process_node(
             "page_media_id": page.page_media_id,
             "thumb_media_id": thumb.id,
             "extract_ref": await save(
-                execution_id, page.page_media_id, "extract.md", markdown
+                execution_id, page.part_id, "extract.md", markdown
             ),
             "annotation_ref": await save(
                 execution_id,
-                page.page_media_id,
+                page.part_id,
                 "annotation.json",
                 annotation.model_dump_json(),
             ),
@@ -83,6 +83,7 @@ def make_process_node(
         res = await image_graph.ainvoke(
             {
                 "media_id": page.page_media_id,
+                "part_id": page.part_id,
                 "document_id": document_id,
                 "execution_id": execution_id,
             },

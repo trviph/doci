@@ -17,12 +17,11 @@ def make_annotate_node(
     """Build the annotate node bound to its activities."""
 
     async def annotate_node(state: DocumentMiningImageState) -> dict:
-        media_id = state["media_id"]
-        data = await download(media_id)
+        data = await download(state["media_id"])
         annotation = await annotate(data)
         ref = await save(
             state["execution_id"],
-            media_id,
+            state["part_id"],
             "annotation.json",
             annotation.model_dump_json(),
         )

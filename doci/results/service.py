@@ -40,30 +40,30 @@ class WorkflowResultService:
         self,
         *,
         execution_id: UUID,
-        media_id: UUID,
+        part_id: UUID,
         kind: ResultKind | str,
         payload: str,
     ) -> UUID:
-        """Upsert a result for ``(execution_id, media_id, kind)``; return its id.
+        """Upsert a result for ``(execution_id, part_id, kind)``; return its id.
 
         Idempotent: LangGraph resume / retries re-run nodes, so a repeat save
         overwrites the existing row rather than duplicating it. An unknown
         ``kind`` raises ``ValueError`` (rather than silently storing a typo).
         """
         kind = ResultKind(kind)
-        _annotate(execution_id, media_id)
+        _annotate(execution_id, part_id)
         content = json.loads(payload) if kind.is_json else {"result": payload}
         return await self._pg.fetch_val(
-            "INSERT INTO workflow_result (execution_id, media_id, kind, content) "
+            "INSERT INTO workflow_result (execution_id, part_id, kind, content) "
             "VALUES (%s, %s, %s, %s) "
-            "ON CONFLICT (execution_id, media_id, kind) "
+            "ON CONFLICT (execution_id, part_id, kind) "
             "DO UPDATE SET content = EXCLUDED.content, updated_at = now() "
             "RETURNING id",
-            [execution_id, media_id, str(kind), Json(content)],
+            [execution_id, part_id, str(kind), Json(content)],
         )
 
 
-def _annotate(execution_id: UUID, media_id: UUID) -> None:
+def _annotate(execution_id: UUID, part_id: UUID) -> None:
     span = get_current_span()
     span.set_attribute("workflow.execution_id", str(execution_id))
-    span.set_attribute("media.id", str(media_id))
+    span.set_attribute("document.part_id", str(part_id))
