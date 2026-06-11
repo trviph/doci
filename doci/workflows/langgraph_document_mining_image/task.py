@@ -13,6 +13,7 @@ from uuid import UUID
 from doci.documents import DocumentStatus, PartKind
 from doci.taskiq import broker
 from doci.taskiq.retry import TaskTimeout
+from doci.workflows.groupspec import resolve_group_spec
 from doci.workflows.langgraph_document_mining_image.deps import build_image_graph
 from doci.workflows.models import WorkflowResult
 from doci.workflows.runtime import final_metadata, get_clients, get_saver
@@ -28,7 +29,7 @@ class DocumentNotReady(Exception):
 
 @broker.task(retry_on_error=True, max_retries=MAX_RETRIES)
 async def run_document_mining_image(
-    document_id: str, execution_id: str, thread_id: str
+    document_id: str, execution_id: str, thread_id: str, group_key: str | None = None
 ) -> dict:
     """Thumbnail + extract + annotate a READY image ``document_id``.
 
@@ -52,6 +53,7 @@ async def run_document_mining_image(
         graph = build_image_graph(
             clients.media, clients.workflow_results, checkpointer=get_saver()
         )
+        group_spec = await resolve_group_spec(clients.userdata_groups, group_key)
         result = await asyncio.wait_for(
             graph.ainvoke(
                 {
@@ -59,6 +61,7 @@ async def run_document_mining_image(
                     "part_id": part.id,
                     "document_id": did,
                     "execution_id": eid,
+                    "group_spec": group_spec,
                 },
                 config={"configurable": {"thread_id": thread_id}},
             ),

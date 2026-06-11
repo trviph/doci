@@ -48,6 +48,11 @@ class SubmitWorkflowRequest(BaseModel):
     workflow: WorkflowKind = Field(
         default=WorkflowKind.DOCUMENT_MINING, description="Which workflow to run."
     )
+    group_key: str | None = Field(
+        default=None,
+        description="Optional dossier group key; annotate classifies each page "
+        "against the group's document types and extracts their fields.",
+    )
 
 
 class WorkflowJobModel(BaseModel):
@@ -96,13 +101,16 @@ def build_workflows_router(
             workflow=body.workflow.value,
             entity_type="document",
             entity_id=body.document_id,
-            input=WorkflowInput(document_id=body.document_id),
+            input=WorkflowInput(document_id=body.document_id, group_key=body.group_key),
             metadata=WorkflowMetadata(
                 langgraph=LangGraphMeta(thread_id=str(thread_id))
             ),
         )
         task = await _TASKS[body.workflow].kiq(
-            str(body.document_id), str(execution_id), str(thread_id)
+            str(body.document_id),
+            str(execution_id),
+            str(thread_id),
+            body.group_key,
         )
         await runs.set_metadata(
             execution_id,

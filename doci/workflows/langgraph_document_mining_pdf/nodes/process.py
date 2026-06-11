@@ -23,6 +23,7 @@ from doci.activities import (
     ExtractContentPdf,
     SaveResult,
 )
+from doci.activities.fields import GroupSpec
 from doci.documents import DocumentService
 from doci.media.mime import MIME_PNG
 from doci.workflows.langgraph_document_mining_pdf.state import (
@@ -51,10 +52,12 @@ def make_process_node(
 ) -> ProcessNode:
     """Build the per-page processing node bound to its activities + image graph."""
 
-    async def _text_page(page: PageRef, execution_id: UUID) -> dict:
+    async def _text_page(
+        page: PageRef, execution_id: UUID, group: GroupSpec | None
+    ) -> dict:
         data = await download(page.page_media_id)
         markdown = await extract_pdf(data)
-        annotation = await annotate_text(markdown)
+        annotation = await annotate_text(markdown, group=group)
 
         async def render() -> tuple[bytes, str]:
             return await create_thumb_pdf(data), MIME_PNG
@@ -78,7 +81,11 @@ def make_process_node(
         }
 
     async def _image_page(
-        page: PageRef, thread_id: str, document_id: UUID, execution_id: UUID
+        page: PageRef,
+        thread_id: str,
+        document_id: UUID,
+        execution_id: UUID,
+        group_spec: dict | None,
     ) -> dict:
         res = await image_graph.ainvoke(
             {
@@ -86,6 +93,7 @@ def make_process_node(
                 "part_id": page.part_id,
                 "document_id": document_id,
                 "execution_id": execution_id,
+                "group_spec": group_spec,
             },
             config={"configurable": {"thread_id": f"{thread_id}:p{page.page_number}"}},
         )
@@ -107,13 +115,17 @@ def make_process_node(
         thread_id = config["configurable"]["thread_id"]
         document_id = state["document_id"]
         execution_id = state["execution_id"]
+        group_spec = state.get("group_spec")
+        group = GroupSpec.model_validate(group_spec) if group_spec else None
         sem = asyncio.Semaphore(max_concurrency)
 
         async def handle(page: PageRef) -> dict:
             async with sem:
                 if page.kind == "text":
-                    return await _text_page(page, execution_id)
-                return await _image_page(page, thread_id, document_id, execution_id)
+                    return await _text_page(page, execution_id, group)
+                return await _image_page(
+                    page, thread_id, document_id, execution_id, group_spec
+                )
 
         results = await asyncio.gather(*(handle(p) for p in state["pages"]))
         results.sort(key=lambda r: r["page_number"])

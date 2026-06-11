@@ -15,6 +15,7 @@ from doci.taskiq.retry import TaskTimeout
 from doci.workflows.langgraph_document_mining.graph import (
     build_document_mining_graph,
 )
+from doci.workflows.groupspec import resolve_group_spec
 from doci.workflows.langgraph_document_mining_image.deps import build_image_graph
 from doci.workflows.langgraph_document_mining_pdf.deps import build_pdf_graph
 from doci.workflows.models import WorkflowResult
@@ -27,7 +28,7 @@ MAX_RETRIES = 3
 
 @broker.task(retry_on_error=True, max_retries=MAX_RETRIES)
 async def run_document_mining(
-    document_id: str, execution_id: str, thread_id: str
+    document_id: str, execution_id: str, thread_id: str, group_key: str | None = None
 ) -> dict:
     """Finalize + classify ``document_id`` and route it through the mining graph.
 
@@ -59,9 +60,15 @@ async def run_document_mining(
             pdf_graph=pdf_graph,
             checkpointer=get_saver(),
         )
+        group_spec = await resolve_group_spec(clients.userdata_groups, group_key)
         result = await asyncio.wait_for(
             graph.ainvoke(
-                {"document_id": UUID(document_id), "execution_id": eid}, config=config
+                {
+                    "document_id": UUID(document_id),
+                    "execution_id": eid,
+                    "group_spec": group_spec,
+                },
+                config=config,
             ),
             timeout=TIMEOUT_S,
         )

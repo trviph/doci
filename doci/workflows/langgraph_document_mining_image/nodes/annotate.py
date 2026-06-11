@@ -5,6 +5,7 @@ extracted text. Sequenced after extract in the graph.
 """
 
 from doci.activities import AnnotateImage, DownloadMedia, SaveResult
+from doci.activities.fields import GroupSpec
 from doci.workflows.langgraph_document_mining_image.nodes.thumbnail import ImageNode
 from doci.workflows.langgraph_document_mining_image.state import (
     DocumentMiningImageState,
@@ -18,7 +19,9 @@ def make_annotate_node(
 
     async def annotate_node(state: DocumentMiningImageState) -> dict:
         data = await download(state["media_id"])
-        annotation = await annotate(data)
+        gs = state.get("group_spec")
+        group = GroupSpec.model_validate(gs) if gs else None
+        annotation = await annotate(data, group=group)
         ref = await save(
             state["execution_id"],
             state["part_id"],
