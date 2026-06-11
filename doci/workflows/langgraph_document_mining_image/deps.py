@@ -13,19 +13,23 @@ from doci.activities import (
     DownloadMedia,
     EnsureThumb,
     ExtractContentImage,
-    SaveResultToDisk,
+    SaveResultToPostgres,
 )
 from doci.activities import annotate_image as _annotate
 from doci.activities import extract_content_image as _extract
 from doci.llm import build_chat_model
 from doci.media import MediaService
+from doci.results import WorkflowResultService
 from doci.workflows.langgraph_document_mining_image.graph import (
     build_document_mining_image_graph,
 )
 
 
 def build_image_graph(
-    media: MediaService, *, checkpointer: BaseCheckpointSaver | None = None
+    media: MediaService,
+    results: WorkflowResultService,
+    *,
+    checkpointer: BaseCheckpointSaver | None = None,
 ) -> CompiledStateGraph:
     """Construct the activities + compile the image child graph."""
     extract = ExtractContentImage(
@@ -50,6 +54,6 @@ def build_image_graph(
         ensure_thumb=EnsureThumb(media),
         extract=extract,
         annotate=annotate,
-        save=SaveResultToDisk(),
+        save=SaveResultToPostgres(results),
         checkpointer=checkpointer,
     )

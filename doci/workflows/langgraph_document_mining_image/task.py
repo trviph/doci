@@ -49,7 +49,9 @@ async def run_document_mining_image(
 
         # A standalone image isn't split: its single "page" is the file itself.
         part = await clients.documents.ensure_source_part(did, kind=PartKind.IMAGE)
-        graph = build_image_graph(clients.media, checkpointer=get_saver())
+        graph = build_image_graph(
+            clients.media, clients.workflow_results, checkpointer=get_saver()
+        )
         result = await asyncio.wait_for(
             graph.ainvoke(
                 {

@@ -62,7 +62,10 @@ async def run_document_mining_pdf(
             )
 
         graph = build_pdf_graph(
-            clients.media, clients.documents, checkpointer=get_saver()
+            clients.media,
+            clients.documents,
+            clients.workflow_results,
+            checkpointer=get_saver(),
         )
         result = await asyncio.wait_for(
             graph.ainvoke(

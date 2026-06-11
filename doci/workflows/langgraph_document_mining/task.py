@@ -48,8 +48,10 @@ async def run_document_mining(
         # persists their state. (build_pdf_graph forwards that None to the image
         # graph it invokes per page; those per-page runs re-run on a retry, the
         # same node-granularity the image branch has.)
-        image_graph = build_image_graph(clients.media)
-        pdf_graph = build_pdf_graph(clients.media, clients.documents)
+        image_graph = build_image_graph(clients.media, clients.workflow_results)
+        pdf_graph = build_pdf_graph(
+            clients.media, clients.documents, clients.workflow_results
+        )
         graph = build_document_mining_graph(
             finalize=FinalizeDocument(clients.documents),
             image_graph=image_graph,
