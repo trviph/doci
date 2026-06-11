@@ -271,9 +271,7 @@ class DocumentService:
         doc = await self._fetch(document_id)
         parts = await self._parts(document_id)
         page_ids = [
-            p.media_id
-            for p in parts
-            if p.media_id and p.media_id != doc.media_id
+            p.media_id for p in parts if p.media_id and p.media_id != doc.media_id
         ]
         media_ids = [doc.media_id, *page_ids]
         by_id = await self._media.get_many(media_ids)

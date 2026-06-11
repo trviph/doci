@@ -54,6 +54,7 @@ async def run_document_mining(
         )
         graph = build_document_mining_graph(
             finalize=FinalizeDocument(clients.documents),
+            documents=clients.documents,
             image_graph=image_graph,
             pdf_graph=pdf_graph,
             checkpointer=get_saver(),

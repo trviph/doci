@@ -53,6 +53,8 @@ class DocumentMiningState(TypedDict, total=False):
     document_id: UUID  # input
     execution_id: UUID  # input (the workflow_execution row; carried to child graphs)
     media_id: UUID  # the original blob (set by the finalize node; used by children)
+    part_id: UUID  # the source part (set by prepare_image; used by the image child)
+    thumb_media_id: UUID | None  # from the image child; recorded by record_image_thumb
     mime_type: str | None  # set by the finalize node
     document_type: DocumentType | None  # set by the finalize node
     unsupported_reason: str | None  # set by the terminal unsupported node
