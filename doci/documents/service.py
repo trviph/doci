@@ -143,11 +143,7 @@ class DocumentService:
         rows commit together; ``ON CONFLICT (document_id, locator)`` is the race
         guard.
         """
-        existing = await self._pg.fetch_one(
-            f"SELECT {_PART_COLS} FROM document_part "
-            "WHERE document_id = %s AND locator = %s",
-            [document_id, locator],
-        )
+        existing = await self._part_row_by_locator(document_id, locator)
         if existing is not None and existing["media_id"] is not None:
             return DocumentPartRecord.from_row(existing)
 
@@ -167,11 +163,7 @@ class DocumentService:
                 [document_id, locator, int(kind), page_number, media.id],
             )
         if row is None:  # raced — another run won the insert; use the winner
-            row = await self._pg.fetch_one(
-                f"SELECT {_PART_COLS} FROM document_part "
-                "WHERE document_id = %s AND locator = %s",
-                [document_id, locator],
-            )
+            row = await self._part_row_by_locator(document_id, locator)
         return DocumentPartRecord.from_row(row)
 
     @internal
@@ -188,11 +180,7 @@ class DocumentService:
         thumbnail then key on this part, uniform with split PDF pages.
         """
         locator = page_locator(1)
-        existing = await self._pg.fetch_one(
-            f"SELECT {_PART_COLS} FROM document_part "
-            "WHERE document_id = %s AND locator = %s",
-            [document_id, locator],
-        )
+        existing = await self._part_row_by_locator(document_id, locator)
         if existing is not None:
             return DocumentPartRecord.from_row(existing)
         doc = await self._fetch(document_id)
@@ -205,11 +193,7 @@ class DocumentService:
             [document_id, locator, int(kind), doc.media_id],
         )
         if row is None:  # raced
-            row = await self._pg.fetch_one(
-                f"SELECT {_PART_COLS} FROM document_part "
-                "WHERE document_id = %s AND locator = %s",
-                [document_id, locator],
-            )
+            row = await self._part_row_by_locator(document_id, locator)
         return DocumentPartRecord.from_row(row)
 
     @internal
@@ -362,6 +346,19 @@ class DocumentService:
         if row is None:
             raise DocumentNotFound(str(document_id))
         return DocumentRecord.from_row(row)
+
+    async def _part_row_by_locator(self, document_id: UUID, locator: str):
+        """Fetch the raw ``document_part`` row for ``(document_id, locator)``, or None.
+
+        Shared by ``ensure_part`` / ``ensure_source_part`` for both the up-front
+        idempotency check and the post-``ON CONFLICT`` race fallback, so the lookup
+        lives in one place.
+        """
+        return await self._pg.fetch_one(
+            f"SELECT {_PART_COLS} FROM document_part "
+            "WHERE document_id = %s AND locator = %s",
+            [document_id, locator],
+        )
 
     async def _parts(self, document_id: UUID) -> list[DocumentPartRecord]:
         rows = await self._pg.fetch_all(
