@@ -1,4 +1,4 @@
-h1:9Y8v+Es1N2zYJMMmsTf3m+0LyH+Hh4mUt4kEr7tQJBQ=
+h1:aU1f8yb+z6g5ygsGf/fKThCHiilFlCvZXhg/DTpf7Ls=
 20260601000000_create_media.sql h1:Id+sDXdLzlPo8YF92rMWQY+V3NsC1Yv01ASE3wqJ5Hw=
 20260608000000_create_workflow_execution.sql h1:2vDrDgfMHkZtORakfzifvV0IwRtyM2nXh1cK1jTYyFo=
 20260609000000_create_workflow_result.sql h1:rKa5UXc/F2vGv/KIzOAztAG6BgHvSM9OBMlD5g/Nx5o=
@@ -6,3 +6,4 @@ h1:9Y8v+Es1N2zYJMMmsTf3m+0LyH+Hh4mUt4kEr7tQJBQ=
 20260610000001_create_document_part.sql h1:pqLVTAugYgYLP92IXWPDqysDTJel0ezt1geNbqtkLAs=
 20260610000002_slim_media.sql h1:nrQ93vwOwYb/LcK2KgzSVnAQfV8oqQ6+3JOlHx5Mjjo=
 20260610000003_result_on_part.sql h1:jJKcJ6CP5QaL/H7wW6XNNQpP6deRhnu/mFCjLvoLU1g=
+20260611081200_create_userdata.sql h1:P4nN582GZ+GNgu3kEwwaZYfGN/UalyUKPSzYU1uL0mQ=
