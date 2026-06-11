@@ -17,10 +17,10 @@ from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 # (botocore/psycopg2/redis) and exposes shutdown().
 from doci import telemetry
 from doci.bootstrap import build_clients, close_clients
+from doci.documents import build_documents_router
 from doci.globals import SERVICE_VERSION
 from doci.health import HealthService, build_health_router
 from doci.helpers import HttpRequestContextMiddleware, InternalAccessError
-from doci.media import build_media_router
 from doci.taskiq import broker as _taskiq_broker
 from doci.workflows.router import build_workflows_router
 
@@ -36,6 +36,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         postgres=clients.postgres, objstore=clients.objstore, kv=clients.kv
     )
     app.state.media = clients.media
+    app.state.documents = clients.documents
     app.state.workflow_runs = clients.workflow_runs
     await _taskiq_broker.startup()
     # Start asyncio runtime metrics (task count + event-loop lag) now that we're
@@ -66,7 +67,7 @@ def create_app() -> FastAPI:
         )
 
     app.include_router(build_health_router())
-    app.include_router(build_media_router())
+    app.include_router(build_documents_router())
     app.include_router(build_workflows_router())
     FastAPIInstrumentor.instrument_app(
         app,

@@ -16,11 +16,12 @@ PageKind = Literal["text", "image"]
 
 @dataclass(frozen=True, slots=True)
 class PageRef:
-    """A split page stored as a ``MediaType.PAGE`` derivative, plus its kind."""
+    """A split page materialized as a ``document_part``, plus its kind."""
 
     page_number: int  # 1-based index within the source document
     kind: PageKind  # which processing path the page takes
-    page_media_id: UUID  # the stored page media (single-page PDF, or PNG if image)
+    page_media_id: UUID  # the stored page blob (single-page PDF, or PNG if image)
+    part_id: UUID  # the document_part row (target for the page's thumbnail)
 
 
 def classify_page(page: PdfPage) -> PageKind:
@@ -38,7 +39,8 @@ def classify_page(page: PdfPage) -> PageKind:
 class DocumentMiningPdfState(TypedDict, total=False):
     """State threaded through the PDF-mining child graph."""
 
-    media_id: UUID  # input (shared with the parent graph)
+    media_id: UUID  # input: the original PDF blob (shared with the parent graph)
+    document_id: UUID  # input: the document (parts are created under it)
     execution_id: UUID  # input (the workflow_execution row; used when saving results)
     page_count: int  # total pages (set by the split node)
     pages: list[PageRef]  # split pages + classification (set by the split node)

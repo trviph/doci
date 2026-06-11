@@ -1,7 +1,7 @@
 """Activity: persist a workflow result to local disk.
 
 One of the ``save_result_to_*`` backends (a ``save_result_to_db`` / object-store
-variant will join it later). Writes ``<execution_id>/<media_id>.<kind>`` under the
+variant will join it later). Writes ``<execution_id>/<part_id>.<kind>`` under the
 results directory — ``DOCI_RESULTS_DIR`` if set, else a temp dir — and returns the
 path. Grouping by ``execution_id`` keeps a single run's results together. For
 trusted, server-generated content (extracted Markdown, annotation JSON, ...).
@@ -18,7 +18,7 @@ from opentelemetry.trace import SpanKind
 from doci.telemetry import traced, with_metrics, with_span
 
 #: The shared save-result interface every ``save_result_to_*`` backend implements:
-#: ``(execution_id, media_id, kind, payload) -> ref`` where ``ref`` locates the
+#: ``(execution_id, part_id, kind, payload) -> ref`` where ``ref`` locates the
 #: stored result.
 SaveResult = Callable[[UUID, UUID, str, str], Awaitable[str]]
 
@@ -42,11 +42,11 @@ class SaveResultToDisk:
     @with_span(kind=SpanKind.INTERNAL)
     @with_metrics()
     async def __call__(
-        self, execution_id: UUID, media_id: UUID, kind: str, payload: str
+        self, execution_id: UUID, part_id: UUID, kind: str, payload: str
     ) -> str:
-        """Write ``payload`` for an execution's ``media_id``/``kind``; return the path."""
+        """Write ``payload`` for an execution's ``part_id``/``kind``; return the path."""
         out_dir = self._dir() / str(execution_id)
         out_dir.mkdir(parents=True, exist_ok=True)
-        path = out_dir / f"{media_id}.{kind}"
+        path = out_dir / f"{part_id}.{kind}"
         path.write_text(payload, encoding="utf-8")
         return str(path)

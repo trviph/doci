@@ -8,6 +8,7 @@ here keeps the two in sync.
 from dataclasses import dataclass, replace
 
 from doci.cache import Cache, CacheMode
+from doci.documents import DocumentService
 from doci.kvstore import KV, KVConfig
 from doci.media import MediaConfig, MediaService
 from doci.objstore import ObjStore
@@ -24,6 +25,7 @@ class Clients:
     objstore: ObjStore
     kv: KV
     media: MediaService
+    documents: DocumentService
     workflow_runs: WorkflowExecutionService
     workflow_results: WorkflowResultService
 
@@ -49,6 +51,7 @@ def build_clients() -> Clients:
     media = MediaService(
         postgres=pg, objstore=obj, cache=media_cache, config=media_config
     )
+    documents = DocumentService(postgres=pg, media=media, config=media_config)
     workflow_runs = WorkflowExecutionService(postgres=pg)
     workflow_results = WorkflowResultService(postgres=pg)
     return Clients(
@@ -56,6 +59,7 @@ def build_clients() -> Clients:
         objstore=obj,
         kv=kv,
         media=media,
+        documents=documents,
         workflow_runs=workflow_runs,
         workflow_results=workflow_results,
     )

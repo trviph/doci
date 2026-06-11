@@ -2,7 +2,7 @@
 
 A ``workflow_result`` row is one stored artifact of a workflow run — the
 extracted Markdown of a page, or the structured annotation of a document —
-keyed by ``(execution_id, media_id, kind)``. The payload lives in a single JSONB
+keyed by ``(execution_id, part_id, kind)``. The payload lives in a single JSONB
 ``content`` column so the (future) deepagents query tool reads every kind the
 same way; see :class:`ResultKind` for how each kind shapes that column.
 """
@@ -45,7 +45,7 @@ class WorkflowResultRecord:
 
     id: UUID
     execution_id: UUID
-    media_id: UUID
+    part_id: UUID
     kind: ResultKind
     content: dict[str, Any]
     created_at: datetime
@@ -56,7 +56,7 @@ class WorkflowResultRecord:
         return cls(
             id=row["id"],
             execution_id=row["execution_id"],
-            media_id=row["media_id"],
+            part_id=row["part_id"],
             kind=ResultKind(row["kind"]),
             content=row["content"],
             created_at=row["created_at"],

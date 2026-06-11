@@ -26,12 +26,12 @@ class SaveResultToPostgres:
     @with_span(kind=SpanKind.INTERNAL)
     @with_metrics()
     async def __call__(
-        self, execution_id: UUID, media_id: UUID, kind: str, payload: str
+        self, execution_id: UUID, part_id: UUID, kind: str, payload: str
     ) -> str:
-        """Store ``payload`` for an execution's ``media_id``/``kind``; return the row id."""
+        """Store ``payload`` for an execution's ``part_id``/``kind``; return the row id."""
         result_id = await self._results.save(
             execution_id=execution_id,
-            media_id=media_id,
+            part_id=part_id,
             kind=kind,
             payload=payload,
         )

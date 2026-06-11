@@ -1,12 +1,18 @@
-"""Media service: upload / finalize / view / view-thumb / list / delete.
+"""Media service: pure blob storage over Postgres + ObjStore + Cache.
 
-Ties together Postgres (the ``media`` table), ObjStore (presigned URLs + content
-streaming), and Cache (view-URL caching in KV). Pages/thumbnails are produced by
-a downstream pipeline; the view ops here read whatever rows exist.
+``media`` is just objects in the store: an ``object_key`` plus content metadata
+(MIME, size) and soft-delete/purge bookkeeping. The document domain — originals,
+pages, regions, upload/validation lifecycle — lives in :mod:`doci.documents`,
+which composes these blob primitives.
+
+Idempotency is keyed on ``object_key`` (``UNIQUE``): callers derive deterministic
+keys (see :mod:`doci.documents`), so re-creating a blob upserts the same row and
+overwrites the same object. The higher layer skips the work entirely on a rerun
+by checking its own rows first.
 """
 
 import asyncio
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable
 from uuid import UUID, uuid4
 
 from opentelemetry.trace import SpanKind, get_current_span
@@ -22,24 +28,26 @@ from doci.media.mime import (
     detect_mime,
     is_gif87a,
 )
-from doci.media.models import (
-    MediaListPage,
-    MediaRecord,
-    MediaStatus,
-    MediaType,
-    MediaView,
-    UploadIntent,
-)
+from doci.media.models import MediaRecord
 from doci.objstore import ObjStore
-from doci.postgres import Postgres
+from doci.postgres import Postgres, Transaction
 from doci.telemetry import traced, with_metrics, with_span
 
 # Adapt uuid.UUID <-> PostgreSQL uuid (params + result columns) process-wide.
 register_uuid()
 
+#: An object that can run statements — the pool (auto-commit per call) or an open
+#: transaction. Both expose the same ``execute``/``fetch_*`` surface, so a caller
+#: can compose a blob write into its own transaction by passing the latter.
+Executor = Postgres | Transaction
+
+#: A coroutine producing ``(bytes, mime_type)`` — deferred so it runs only when a
+#: blob actually needs creating (skipped on the idempotent fast path).
+Render = Callable[[], Awaitable[tuple[bytes, str | None]]]
+
 _COLS = (
-    "id, parent_id, type, object_key, name, mime_type, size_bytes, "
-    "status, deleted_at, purge_after, created_at, updated_at"
+    "id, object_key, mime_type, size_bytes, "
+    "deleted_at, purge_after, created_at, updated_at"
 )
 
 
@@ -48,10 +56,6 @@ class MediaError(Exception):
 
 
 class MediaNotFound(MediaError):
-    pass
-
-
-class AlreadyFinalized(MediaError):
     pass
 
 
@@ -65,7 +69,7 @@ class TooLarge(MediaError):
 
 @traced
 class MediaService:
-    """Upload lifecycle + presigned views over the ``media`` table."""
+    """Blob lifecycle + presigned views over the ``media`` table."""
 
     def __init__(
         self,
@@ -80,69 +84,109 @@ class MediaService:
         self._cache = cache
         self._cfg = config
 
-    # region uploads
-    @with_span(kind=SpanKind.CLIENT)
-    @with_metrics()
-    async def request_upload(
-        self,
-        *,
-        name: str | None = None,
-        parent_id: UUID | None = None,
-        type: MediaType = MediaType.ORIGINAL,
-    ) -> UploadIntent:
-        """Create a `new` media row and return its presigned PUT URL."""
-        mid = uuid4()
-        object_key = f"{MediaType(type).key_prefix}/{mid}"
-        await self._pg.execute(
-            "INSERT INTO media (id, parent_id, type, object_key, name, status) "
-            "VALUES (%s, %s, %s, %s, %s, %s)",
-            [mid, parent_id, int(type), object_key, name, int(MediaStatus.NEW)],
-        )
-        upload_url = await self._obj.presign_put(
+    # region blob primitives
+    async def presign_put(self, object_key: str) -> str:
+        """Presigned PUT URL for a client-side upload to ``object_key``."""
+        return await self._obj.presign_put(
             object_key, expires_in=self._cfg.upload_expiry
         )
-        return UploadIntent(id=mid, upload_url=upload_url)
 
-    @with_span(kind=SpanKind.CLIENT)
-    @with_metrics()
-    async def finalize(self, media_id: UUID) -> MediaRecord:
-        """Validate the uploaded object (MIME + size) and mark it ready/invalid."""
-        _annotate(media_id)
-        rec = await self._fetch(media_id)
-        if rec.status is not MediaStatus.NEW:
-            raise AlreadyFinalized(str(media_id))
+    @internal
+    async def upload_object(
+        self, object_key: str, data: bytes, mime: str | None
+    ) -> None:
+        """Store server-generated ``data`` at ``object_key`` (S3 only; no DB write).
 
+        Internal-only: client uploads go through a presigned PUT
+        (:meth:`presign_put`), never the server.
+        """
+        await self._obj.upload(object_key, data, content_type=mime)
+
+    async def insert_blob(
+        self,
+        executor: Executor,
+        *,
+        object_key: str,
+        media_id: UUID | None = None,
+        mime: str | None = None,
+        size: int | None = None,
+    ) -> MediaRecord:
+        """Upsert a ``media`` row for ``object_key`` and return it.
+
+        Idempotent on ``object_key``: a second insert for the same key updates the
+        existing row's MIME/size rather than creating a duplicate. Runs on the
+        given ``executor`` so the caller can include it in a transaction.
+        """
+        row = await executor.fetch_one(
+            f"INSERT INTO media (id, object_key, mime_type, size_bytes) "
+            f"VALUES (%s, %s, %s, %s) "
+            f"ON CONFLICT (object_key) DO UPDATE "
+            f"SET mime_type = EXCLUDED.mime_type, size_bytes = EXCLUDED.size_bytes, "
+            f"    updated_at = now() "
+            f"RETURNING {_COLS}",
+            [media_id or uuid4(), object_key, mime, size],
+        )
+        return MediaRecord.from_row(row)
+
+    async def validate_object(
+        self, object_key: str, *, name: str | None = None
+    ) -> tuple[str, int]:
+        """Stream the stored object, validate MIME + size, return ``(mime, size)``.
+
+        Raises :class:`TooLarge` past the configured size cap, or
+        :class:`UnsupportedType` for an undetectable/blocked MIME.
+        """
         buf = bytearray()
         too_large = False
-        async for chunk in self._obj.stream(rec.object_key):
+        async for chunk in self._obj.stream(object_key):
             buf.extend(chunk)
             if len(buf) >= self._cfg.max_size:
                 too_large = True
                 break
         if too_large:
-            await self._set_invalid(media_id)
-            raise TooLarge(str(media_id))
+            raise TooLarge(object_key)
 
         data = bytes(buf)
-        mime = detect_mime(data, filename=rec.name)
+        mime = detect_mime(data, filename=name)
         if mime is None:
-            await self._set_invalid(media_id)
-            raise UnsupportedType(str(media_id))
+            raise UnsupportedType(object_key)
         if (
             mime == MIME_GIF
             and not is_gif87a(data[:HEADER_LEN])
             and NETSCAPE_MARKER in data
         ):
-            await self._set_invalid(media_id)
-            raise UnsupportedType(str(media_id))
+            raise UnsupportedType(object_key)
+        return mime, len(data)
 
-        await self._pg.execute(
-            "UPDATE media SET status = %s, mime_type = %s, size_bytes = %s, updated_at = now() "
-            "WHERE id = %s",
-            [int(MediaStatus.READY), mime, len(data), media_id],
+    @internal
+    @with_span(kind=SpanKind.CLIENT)
+    @with_metrics()
+    async def ensure_thumb(self, source_media_id: UUID, render: Render) -> MediaRecord:
+        """Idempotently create the thumbnail blob for ``source_media_id``.
+
+        The thumb's key is derived from its source's (``{source_key}.thumb``), so
+        it needs no document/region context. If the thumb already exists,
+        ``render`` is never called and nothing is uploaded; otherwise the rendered
+        bytes are stored and a row upserted. Document-agnostic by design — the same
+        method serves a standalone image, a split PDF page, or any region blob.
+        """
+        src = await self._fetch(source_media_id)
+        thumb_key = f"{src.object_key}.thumb"
+        existing = await self._pg.fetch_one(
+            f"SELECT {_COLS} FROM media WHERE object_key = %s AND deleted_at IS NULL",
+            [thumb_key],
         )
-        return await self._fetch(media_id, include_deleted=True)
+        if existing is not None:
+            return MediaRecord.from_row(existing)
+        data, mime = await render()
+        await self.upload_object(thumb_key, data, mime)
+        return await self.insert_blob(
+            self._pg, object_key=thumb_key, mime=mime, size=len(data)
+        )
 
+    # endregion
+
+    # region reads
     @with_span(kind=SpanKind.CLIENT)
     @with_metrics()
     async def get(self, media_id: UUID) -> MediaRecord:
@@ -158,189 +202,49 @@ class MediaService:
         rec = await self._fetch(media_id)
         return await self._obj.download(rec.object_key)
 
-    @internal
-    @with_span(kind=SpanKind.CLIENT)
-    @with_metrics()
-    async def upload(
-        self,
-        data: bytes,
-        *,
-        name: str | None = None,
-        parent_id: UUID | None = None,
-        type: MediaType = MediaType.ORIGINAL,
-        mime_type: str | None = None,
-    ) -> MediaRecord:
-        """Store ``data`` as a new, already-finalized media row.
-
-        For trusted, server-generated content (split pages, thumbnails). Uploads
-        the bytes, then inserts a READY row. MIME is auto-detected, falling back
-        to ``mime_type``. Internal-only: never call this from an HTTP request.
-        """
-        mid = uuid4()
-        object_key = f"{MediaType(type).key_prefix}/{mid}"
-        _annotate(mid)
-        mime = detect_mime(data, filename=name) or mime_type
-        await self._obj.upload(object_key, data, content_type=mime)
-        await self._pg.execute(
-            "INSERT INTO media "
-            "(id, parent_id, type, object_key, name, mime_type, size_bytes, status) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-            [
-                mid,
-                parent_id,
-                int(type),
-                object_key,
-                name,
-                mime,
-                len(data),
-                int(MediaStatus.READY),
-            ],
+    async def get_many(self, ids: list[UUID]) -> dict[UUID, MediaRecord]:
+        """Fetch the (non-deleted) media rows for ``ids``, keyed by id."""
+        if not ids:
+            return {}
+        rows = await self._pg.fetch_all(
+            f"SELECT {_COLS} FROM media WHERE id = ANY(%s) AND deleted_at IS NULL",
+            [ids],
         )
-        return await self._fetch(mid)
+        return {r["id"]: MediaRecord.from_row(r) for r in rows}
+
+    async def view_url(self, object_key: str) -> str:
+        """Cache-backed presigned GET URL for ``object_key``."""
+        hit = await self._cache.get(object_key)
+        if hit is not None:
+            return hit
+        url = await self._obj.presign_get(object_key, expires_in=self._cfg.view_expiry)
+        await self._cache.set(object_key, url, ttl=self._cfg.view_cache_ttl)
+        return url
+
+    async def view_urls(self, object_keys: list[str]) -> list[str]:
+        """Presigned GET URLs for many keys, bounded by the configured concurrency."""
+        sem = asyncio.Semaphore(self._cfg.concurrency)
+
+        async def one(key: str) -> str:
+            async with sem:
+                return await self.view_url(key)
+
+        return list(await asyncio.gather(*(one(k) for k in object_keys)))
 
     # endregion
 
-    # region views
-    @with_span(kind=SpanKind.CLIENT)
-    @with_metrics()
-    async def get_view(self, media_id: UUID) -> MediaView:
-        """Presigned view URLs for the original + its pages."""
-        _annotate(media_id)
-        original = await self._fetch(media_id)
-        pages = await self._children(media_id, MediaType.PAGE)
-        records = [original, *pages]
-        urls = await self._view_urls([r.object_key for r in records])
-        views = [
-            MediaView(media=r, view_url=u) for r, u in zip(records, urls, strict=True)
-        ]
-        return MediaView(
-            media=views[0].media, view_url=views[0].view_url, children=views[1:]
-        )
-
-    @with_span(kind=SpanKind.CLIENT)
-    @with_metrics()
-    async def get_view_thumb(self, media_id: UUID) -> MediaView:
-        """Presigned view URLs for the thumb of the original + the thumb of each page."""
-        _annotate(media_id)
-        original = await self._fetch(media_id)
-        pages = await self._children(media_id, MediaType.PAGE)
-        parent_ids = [original.id, *(p.id for p in pages)]
-        rows = await self._pg.fetch_all(
-            f"SELECT {_COLS} FROM media "
-            "WHERE parent_id = ANY(%s) AND type = %s AND deleted_at IS NULL",
-            [parent_ids, int(MediaType.THUMB)],
-        )
-        thumb_by_parent = {
-            rec.parent_id: rec for rec in (MediaRecord.from_row(r) for r in rows)
-        }
-        original_thumb = thumb_by_parent.get(original.id)
-        if original_thumb is None:
-            raise MediaNotFound(f"no thumbnail for {media_id}")
-        records = [
-            original_thumb,
-            *(thumb_by_parent[p.id] for p in pages if p.id in thumb_by_parent),
-        ]
-        urls = await self._view_urls([r.object_key for r in records])
-        views = [
-            MediaView(media=r, view_url=u) for r, u in zip(records, urls, strict=True)
-        ]
-        return MediaView(
-            media=views[0].media, view_url=views[0].view_url, children=views[1:]
-        )
-
-    # endregion
-
-    # region listing / deletion
-    @with_span(kind=SpanKind.CLIENT)
-    @with_metrics()
-    async def list_media(
-        self, *, limit: int | None = None, offset: int = 0
-    ) -> MediaListPage:
-        """List originals (newest first), paginated."""
-        lim = max(1, min(limit or self._cfg.page_size, self._cfg.max_page_size))
-        offset = max(0, offset)
-        rows = await self._pg.fetch_all(
-            f"SELECT {_COLS} FROM media WHERE type = %s AND deleted_at IS NULL "
-            "ORDER BY created_at DESC, id LIMIT %s OFFSET %s",
-            [int(MediaType.ORIGINAL), lim + 1, offset],
-        )
-        has_more = len(rows) > lim
-        items = [MediaRecord.from_row(r) for r in rows[:lim]]
-        return MediaListPage(items=items, limit=lim, offset=offset, has_more=has_more)
-
-    @with_span(kind=SpanKind.CLIENT)
-    @with_metrics()
-    async def delete(self, ids: Sequence[UUID]) -> int:
-        """Soft-delete one or many media plus their descendants. Returns the count."""
-        id_list = list(ids)
-        if not id_list:
-            return 0
-        rows = await self._pg.fetch_all(
-            """
-            WITH RECURSIVE subtree(id, depth) AS (
-                SELECT id, 0 FROM media WHERE id = ANY(%(ids)s)
-                UNION ALL
-                SELECT m.id, s.depth + 1 FROM media m JOIN subtree s ON m.parent_id = s.id
-                WHERE s.depth < %(max_depth)s
-            )
-            UPDATE media SET deleted_at = now(),
-                             purge_after = now() + %(purge)s * interval '1 second',
-                             updated_at = now()
-            WHERE id IN (SELECT id FROM subtree) AND deleted_at IS NULL
-            RETURNING id
-            """,
-            {
-                "ids": id_list,
-                "max_depth": self._cfg.delete_max_depth,
-                "purge": self._cfg.purge_after,
-            },
-        )
-        return len(rows)
-
-    @internal
-    @with_span(kind=SpanKind.CLIENT)
-    @with_metrics()
-    async def soft_delete_invalid(self) -> int:
-        """Soft-delete all invalid media (plus descendants). Returns the count.
-
-        Routes every ``INVALID`` row into the normal purge grace window, the same
-        way :meth:`delete` handles a user-requested removal. Idempotent: rows
-        already soft-deleted (``deleted_at IS NOT NULL``) are skipped.
-        """
-        rows = await self._pg.fetch_all(
-            """
-            WITH RECURSIVE subtree(id, depth) AS (
-                SELECT id, 0 FROM media WHERE status = %(invalid)s AND deleted_at IS NULL
-                UNION ALL
-                SELECT m.id, s.depth + 1 FROM media m JOIN subtree s ON m.parent_id = s.id
-                WHERE s.depth < %(max_depth)s
-            )
-            UPDATE media SET deleted_at = now(),
-                             purge_after = now() + %(purge)s * interval '1 second',
-                             updated_at = now()
-            WHERE id IN (SELECT id FROM subtree) AND deleted_at IS NULL
-            RETURNING id
-            """,
-            {
-                "invalid": int(MediaStatus.INVALID),
-                "max_depth": self._cfg.delete_max_depth,
-                "purge": self._cfg.purge_after,
-            },
-        )
-        return len(rows)
-
+    # region purge
     @internal
     @with_span(kind=SpanKind.CLIENT)
     @with_metrics()
     async def purge_expired(self) -> int:
         """Hard-delete media whose purge deadline has passed; objects first.
 
-        Collects every eligible row (parents *and* children) before deleting
-        anything, so the ``ON DELETE CASCADE`` FK can't drop a child row before we
-        remove its object. Each S3 object is deleted first; the matching DB row is
-        removed only once its object is gone, so a transient store failure simply
-        leaves the row for the next sweep instead of orphaning the object. Returns
-        the number of rows hard-deleted.
+        Each S3 object is deleted first; the matching DB row is removed only once
+        its object is gone, so a transient store failure simply leaves the row for
+        the next sweep instead of orphaning the object. Removing a ``media`` row
+        cascades to the ``document`` / ``document_part`` rows that reference it.
+        Returns the number of rows hard-deleted.
         """
         rows = await self._pg.fetch_all(
             "SELECT id, object_key FROM media "
@@ -373,48 +277,14 @@ class MediaService:
     # endregion
 
     # region internals
-    async def _fetch(
-        self, media_id: UUID, *, include_deleted: bool = False
-    ) -> MediaRecord:
-        query = f"SELECT {_COLS} FROM media WHERE id = %s"
-        if not include_deleted:
-            query += " AND deleted_at IS NULL"
-        row = await self._pg.fetch_one(query, [media_id])
+    async def _fetch(self, media_id: UUID) -> MediaRecord:
+        row = await self._pg.fetch_one(
+            f"SELECT {_COLS} FROM media WHERE id = %s AND deleted_at IS NULL",
+            [media_id],
+        )
         if row is None:
             raise MediaNotFound(str(media_id))
         return MediaRecord.from_row(row)
-
-    async def _children(self, parent_id: UUID, mtype: MediaType) -> list[MediaRecord]:
-        rows = await self._pg.fetch_all(
-            f"SELECT {_COLS} FROM media "
-            "WHERE parent_id = %s AND type = %s AND deleted_at IS NULL "
-            "ORDER BY created_at, id",
-            [parent_id, int(mtype)],
-        )
-        return [MediaRecord.from_row(r) for r in rows]
-
-    async def _set_invalid(self, media_id: UUID) -> None:
-        await self._pg.execute(
-            "UPDATE media SET status = %s, updated_at = now() WHERE id = %s",
-            [int(MediaStatus.INVALID), media_id],
-        )
-
-    async def _view_urls(self, object_keys: list[str]) -> list[str]:
-        sem = asyncio.Semaphore(self._cfg.concurrency)
-
-        async def one(key: str) -> str:
-            async with sem:
-                return await self._view_url(key)
-
-        return list(await asyncio.gather(*(one(k) for k in object_keys)))
-
-    async def _view_url(self, object_key: str) -> str:
-        hit = await self._cache.get(object_key)
-        if hit is not None:
-            return hit
-        url = await self._obj.presign_get(object_key, expires_in=self._cfg.view_expiry)
-        await self._cache.set(object_key, url, ttl=self._cfg.view_cache_ttl)
-        return url
 
     # endregion
 

@@ -13,10 +13,11 @@ def make_extract_node(
     """Build the extract-content node bound to its activities."""
 
     async def extract_node(state: DocumentMiningImageState) -> dict:
-        media_id = state["media_id"]
-        data = await download(media_id)
+        data = await download(state["media_id"])
         markdown = await extract(data)
-        ref = await save(state["execution_id"], media_id, "extract.md", markdown)
+        ref = await save(
+            state["execution_id"], state["part_id"], "extract.md", markdown
+        )
         return {"extract_ref": ref}
 
     return extract_node

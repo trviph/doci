@@ -12,15 +12,17 @@ from doci.activities import (
     AnnotateText,
     CreateThumbPdf,
     DownloadMedia,
+    EnsureThumb,
     ExtractContentPdf,
     RenderImagePdf,
-    SaveResultToDisk,
+    SaveResultToPostgres,
     SplitPdf,
-    UploadMedia,
 )
 from doci.activities import annotate_text as _annotate_text
+from doci.documents import DocumentService
 from doci.llm import build_chat_model
 from doci.media import MediaService
+from doci.results import WorkflowResultService
 from doci.workflows.langgraph_document_mining_image.deps import build_image_graph
 from doci.workflows.langgraph_document_mining_pdf.graph import (
     build_document_mining_pdf_graph,
@@ -28,7 +30,11 @@ from doci.workflows.langgraph_document_mining_pdf.graph import (
 
 
 def build_pdf_graph(
-    media: MediaService, *, checkpointer: BaseCheckpointSaver | None = None
+    media: MediaService,
+    documents: DocumentService,
+    results: WorkflowResultService,
+    *,
+    checkpointer: BaseCheckpointSaver | None = None,
 ) -> CompiledStateGraph:
     """Construct the activities + compile the PDF child graph.
 
@@ -43,16 +49,17 @@ def build_pdf_graph(
             default_params=_annotate_text.LLM_DEFAULT_PARAMS,
         )
     )
-    image_graph = build_image_graph(media, checkpointer=checkpointer)
+    image_graph = build_image_graph(media, results, checkpointer=checkpointer)
     return build_document_mining_pdf_graph(
         download=DownloadMedia(media),
         split=SplitPdf(),
         render_image_pdf=RenderImagePdf(),
-        upload=UploadMedia(media),
+        ensure_thumb=EnsureThumb(media),
         extract_pdf=ExtractContentPdf(),
         annotate_text=annotate_text,
         create_thumb_pdf=CreateThumbPdf(),
-        save=SaveResultToDisk(),
+        save=SaveResultToPostgres(results),
         image_graph=image_graph,
+        documents=documents,
         checkpointer=checkpointer,
     )

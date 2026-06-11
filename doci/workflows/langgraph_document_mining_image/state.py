@@ -12,7 +12,9 @@ from uuid import UUID
 class DocumentMiningImageState(TypedDict, total=False):
     """State for the image-mining child graph."""
 
-    media_id: UUID  # input (shared with the parent graph)
+    media_id: UUID  # input: the blob to mine (original image, or a split PDF page)
+    part_id: UUID  # input: the document_part this run produces results/thumb for
+    document_id: UUID  # input: the owning document (threaded for parity; unused here)
     execution_id: UUID  # input (the workflow_execution row; used when saving results)
     thumb_media_id: UUID | None  # set by the thumbnail node
     extract_ref: str | None  # disk path of the extracted Markdown (FIXME: db)
