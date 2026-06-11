@@ -14,6 +14,11 @@ from doci.media import MediaConfig, MediaService
 from doci.objstore import ObjStore
 from doci.postgres import Postgres
 from doci.results import WorkflowResultService
+from doci.userdata import (
+    AuditRuleService,
+    DocumentGroupService,
+    ReferenceDataService,
+)
 from doci.workflows import WorkflowExecutionService
 
 
@@ -28,6 +33,9 @@ class Clients:
     documents: DocumentService
     workflow_runs: WorkflowExecutionService
     workflow_results: WorkflowResultService
+    userdata_groups: DocumentGroupService
+    userdata_rules: AuditRuleService
+    userdata_refdata: ReferenceDataService
 
 
 def build_clients() -> Clients:
@@ -54,6 +62,9 @@ def build_clients() -> Clients:
     documents = DocumentService(postgres=pg, media=media, config=media_config)
     workflow_runs = WorkflowExecutionService(postgres=pg)
     workflow_results = WorkflowResultService(postgres=pg)
+    userdata_groups = DocumentGroupService(postgres=pg)
+    userdata_rules = AuditRuleService(postgres=pg)
+    userdata_refdata = ReferenceDataService(postgres=pg)
     return Clients(
         postgres=pg,
         objstore=obj,
@@ -62,6 +73,9 @@ def build_clients() -> Clients:
         documents=documents,
         workflow_runs=workflow_runs,
         workflow_results=workflow_results,
+        userdata_groups=userdata_groups,
+        userdata_rules=userdata_rules,
+        userdata_refdata=userdata_refdata,
     )
 
 
