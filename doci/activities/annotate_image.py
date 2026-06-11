@@ -15,6 +15,7 @@ from opentelemetry.trace import SpanKind
 from pydantic import BaseModel, Field
 
 from doci.activities._vision import image_message
+from doci.activities.fields import FieldSpec
 from doci.prompts import load
 from doci.telemetry import traced, with_metrics, with_span
 
@@ -81,17 +82,6 @@ class ImageAnnotation(BaseModel):
     facts: list[Fact] = Field(
         default_factory=list,
         description="discrete audit-relevant facts the image asserts or shows (flat)",
-    )
-
-
-class FieldSpec(BaseModel):
-    """A field the caller wants extracted from the image, if present."""
-
-    name: str = Field(
-        description="attribute name to extract; becomes the fact's subject"
-    )
-    hint: str | None = Field(
-        default=None, description="optional note on what to look for or where"
     )
 
 

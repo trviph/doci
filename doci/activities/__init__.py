@@ -14,6 +14,7 @@ from doci.activities.create_thumb_image import CreateThumbImage
 from doci.activities.create_thumb_pdf import CreateThumbPdf
 from doci.activities.download_media import DownloadMedia
 from doci.activities.ensure_thumb import EnsureThumb
+from doci.activities.fields import FieldSpec
 from doci.activities.extract_content_image import ExtractContentImage
 from doci.activities.extract_content_pdf import ExtractContentPdf
 from doci.activities.finalize_document import FinalizeDocument
@@ -32,6 +33,7 @@ __all__ = [
     "AnnotateText",
     "TextAnnotation",
     "TextFact",
+    "FieldSpec",
     "CreateThumbPdf",
     "CreateThumbImage",
     "DownloadMedia",

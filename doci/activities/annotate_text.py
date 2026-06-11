@@ -13,6 +13,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from opentelemetry.trace import SpanKind
 from pydantic import BaseModel, Field
 
+from doci.activities.fields import FieldSpec
 from doci.prompts import load
 from doci.telemetry import traced, with_metrics, with_span
 
@@ -56,17 +57,6 @@ class TextAnnotation(BaseModel):
     facts: list[TextFact] = Field(
         default_factory=list,
         description="discrete audit-relevant facts the document asserts (flat)",
-    )
-
-
-class FieldSpec(BaseModel):
-    """A field the caller wants extracted from the document, if present."""
-
-    name: str = Field(
-        description="attribute name to extract; becomes the fact's subject"
-    )
-    hint: str | None = Field(
-        default=None, description="optional note on what to look for or where"
     )
 
 
