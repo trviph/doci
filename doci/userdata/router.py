@@ -194,6 +194,10 @@ class DeleteResult(BaseModel):
     deleted: int
 
 
+class UpsertResult(BaseModel):
+    upserted: int
+
+
 # endregion
 
 
@@ -499,10 +503,10 @@ def _refdata_router(bound: ReferenceDataService | None) -> APIRouter:
         key: str,
         body: BulkUpsert = Body(...),
         svc: ReferenceDataService = Depends(_svc),
-    ) -> DeleteResult:
+    ) -> UpsertResult:
         with _map_errors():
             n = await svc.bulk_upsert(key, [rec.model_dump() for rec in body.records])
-        return DeleteResult(deleted=n)
+        return UpsertResult(upserted=n)
 
     @r.get("/{key}/records/{record_key}", summary="Get a record", responses={404: {}})
     async def get_record(
