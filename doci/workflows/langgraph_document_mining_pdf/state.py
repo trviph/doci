@@ -42,6 +42,7 @@ class DocumentMiningPdfState(TypedDict, total=False):
     media_id: UUID  # input: the original PDF blob (shared with the parent graph)
     document_id: UUID  # input: the document (parts are created under it)
     execution_id: UUID  # input (the workflow_execution row; used when saving results)
+    group_spec: dict | None  # input: dossier GroupSpec (dict) for group-aware annotate
     page_count: int  # total pages (set by the split node)
     pages: list[PageRef]  # split pages + classification (set by the split node)
     page_results: list[dict]  # per-page outputs (set by the process node)

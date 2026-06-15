@@ -13,6 +13,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from opentelemetry.trace import SpanKind
 from pydantic import BaseModel, Field
 
+from doci.activities.fields import FieldSpec, GroupSpec
 from doci.prompts import load
 from doci.telemetry import traced, with_metrics, with_span
 
@@ -57,28 +58,46 @@ class TextAnnotation(BaseModel):
         default_factory=list,
         description="discrete audit-relevant facts the document asserts (flat)",
     )
-
-
-class FieldSpec(BaseModel):
-    """A field the caller wants extracted from the document, if present."""
-
-    name: str = Field(
-        description="attribute name to extract; becomes the fact's subject"
-    )
-    hint: str | None = Field(
-        default=None, description="optional note on what to look for or where"
+    item_key: str | None = Field(
+        default=None,
+        description="when a dossier group is supplied, the key of the document "
+        "type this text was classified as (null if none match)",
     )
 
 
-def _user_prompt(text: str, fields: Sequence[FieldSpec] | None) -> str:
-    """The per-call user message: instruction, optional watchlist, then the document."""
-    prompt = "Annotate the document below."
-    if fields:
-        lines = "\n".join(
-            f"- {f.name}: {f.hint}" if f.hint else f"- {f.name}" for f in fields
+def _user_prompt(
+    text: str, fields: Sequence[FieldSpec] | None, group: GroupSpec | None
+) -> str:
+    """The per-call user message: instruction (+ classification or watchlist),
+    then the document. With a ``group`` the model classifies the text to one of
+    the dossier's document types and extracts that type's fields."""
+    if group is not None and group.items:
+        catalog = "\n".join(
+            f"- {it.key}: {it.name}"
+            + (f" — {it.description}" if it.description else "")
+            + (
+                f"\n    fields: {', '.join(f.name for f in it.fields)}"
+                if it.fields
+                else ""
+            )
+            for it in group.items
         )
-        prompt += f"\n\nFields to look for (extract into facts if present):\n{lines}"
-    return f"{prompt}\n\n<document>\n{text}\n</document>"
+        instruction = (
+            f'This document is one document from the "{group.name}" dossier. '
+            "Decide which ONE of these document types it is and set `item_key` to "
+            "that type's key (or null if none match). Then extract that type's "
+            f"fields into `facts` when present.\n\nDocument types:\n{catalog}"
+        )
+    else:
+        instruction = "Annotate the document below."
+        if fields:
+            lines = "\n".join(
+                f"- {f.name}: {f.hint}" if f.hint else f"- {f.name}" for f in fields
+            )
+            instruction += (
+                f"\n\nFields to look for (extract into facts if present):\n{lines}"
+            )
+    return f"{instruction}\n\n<document>\n{text}\n</document>"
 
 
 @traced
@@ -91,13 +110,17 @@ class AnnotateText:
     @with_span(kind=SpanKind.INTERNAL)
     @with_metrics()
     async def __call__(
-        self, text: str, fields: Sequence[FieldSpec] | None = None
+        self,
+        text: str,
+        fields: Sequence[FieldSpec] | None = None,
+        group: GroupSpec | None = None,
     ) -> TextAnnotation:
         """Return a structured annotation of the ``text`` document.
 
-        ``fields`` is an optional watchlist of attributes the caller wants
-        extracted into ``facts`` when present in the text.
+        With a ``group`` the text is classified to one of the dossier's document
+        types (``item_key``) and that type's fields are extracted; otherwise
+        ``fields`` is an optional flat watchlist extracted into ``facts``.
         """
         return await self._model.ainvoke(
-            [SystemMessage(_SYSTEM), HumanMessage(_user_prompt(text, fields))]
+            [SystemMessage(_SYSTEM), HumanMessage(_user_prompt(text, fields, group))]
         )
