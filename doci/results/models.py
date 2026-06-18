@@ -62,3 +62,28 @@ class WorkflowResultRecord:
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )
+
+
+@dataclass(frozen=True, slots=True)
+class PageRef:
+    """A page in a run's index: its part + classification (no full content).
+
+    The compact view an audit agent scans first; ``item_key`` is the dossier
+    document type the page was classified as (``None`` if unmatched/no dossier).
+    """
+
+    part_id: UUID
+    page_number: int | None
+    locator: str
+    item_key: str | None
+    category: str | None
+
+    @classmethod
+    def from_row(cls, row: dict[str, Any]) -> "PageRef":
+        return cls(
+            part_id=row["part_id"],
+            page_number=row["page_number"],
+            locator=row["locator"],
+            item_key=row["item_key"],
+            category=row["category"],
+        )
