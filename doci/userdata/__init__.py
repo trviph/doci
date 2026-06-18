@@ -1,45 +1,11 @@
-"""User data layer.
+"""User data layer: org-provided definitions an agent consults.
 
-- Per-concern definitions live in submodules: :mod:`dossiers`, :mod:`documents`,
-  :mod:`rules` (dossier defs, document defs, agent rules).
-- The unified **reference-dataset registry** (:class:`ReferenceDataService`)
-  exposes one discover + query interface over arbitrary org datasets.
+Each concern is a self-contained submodule, imported directly:
+
+- :mod:`doci.userdata.dossiers` — dossier definitions
+- :mod:`doci.userdata.documents` — document definitions (m‑1 to a dossier)
+- :mod:`doci.userdata.rules` — agent rules (+ m‑n link to dossiers)
+- :mod:`doci.userdata.knowledge` — natural-language reference material
+
+Shared helpers live in :mod:`doci.userdata.common` and :mod:`doci.userdata.errors`.
 """
-
-from doci.userdata.errors import (
-    DuplicateKey,
-    NotFound,
-    SchemaViolation,
-    UnknownField,
-    UserDataError,
-)
-from doci.userdata.models import (
-    DatasetInfo,
-    FieldDef,
-    FieldType,
-    ListPage,
-    ReferenceDataset,
-    ReferenceRecord,
-    gen_key,
-)
-from doci.userdata.refdata_service import ReferenceDataService
-from doci.userdata.router import build_userdata_router
-
-__all__ = [
-    "ReferenceDataService",
-    "build_userdata_router",
-    # models
-    "ReferenceDataset",
-    "ReferenceRecord",
-    "DatasetInfo",
-    "FieldDef",
-    "FieldType",
-    "ListPage",
-    "gen_key",
-    # errors
-    "UserDataError",
-    "NotFound",
-    "DuplicateKey",
-    "SchemaViolation",
-    "UnknownField",
-]
