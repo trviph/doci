@@ -129,7 +129,7 @@ class AgentRuleService:
             dossier_ids: list = []
             if wanted:
                 rows = await tx.fetch_all(
-                    f"SELECT id, key FROM dossier_def "
+                    "SELECT id, key FROM dossier_def "
                     "WHERE key = ANY(%s) AND deleted_at IS NULL",
                     [wanted],
                 )

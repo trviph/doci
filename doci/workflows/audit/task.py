@@ -1,10 +1,11 @@
-"""TaskIQ entry point for the audit workflow.
+"""TaskIQ entry point for the audit workflow (two phases, fresh context each).
 
-Runs the deepagents audit agent (:func:`build_audit_agent`) over a document's
-mined results for a dossier, then records the verdict on the audit
-``workflow_execution`` row. Mirrors the mining tasks: clients are read from
-``broker.state`` (built at worker startup); the agent persists findings/verdict
-as a side effect via its tools, so the result here is just a summary.
+Phase 1 (finding): the orchestrator + rule subagents investigate the document's
+mined results and record findings. Phase 2 (verdict): a separate small agent — a
+*fresh* invocation with its own context — reads only the recorded findings and
+sets the dossier verdict. Splitting them keeps each context small (the monolithic
+single-phase agent timed out before reaching a verdict). Clients come from
+``broker.state``; findings/verdict are persisted by the agents' tools.
 """
 
 import asyncio
@@ -12,22 +13,29 @@ from uuid import UUID
 
 from langchain_core.messages import HumanMessage
 
-from doci.agents import build_audit_agent
+from doci.agents import build_finding_agent, build_verdict_agent
 from doci.taskiq import broker
 from doci.taskiq.retry import TaskTimeout
 from doci.workflows.models import WorkflowResult
 from doci.workflows.runtime import final_metadata, get_clients, get_saver
 
-TIMEOUT_S = 20 * 60
+# Per-phase budgets + graph-step limits. The finding phase delegates a subagent
+# per rule (or per group), so it gets the bigger budget; the verdict phase reads
+# a compact list and concludes, so it is short.
+FINDING_TIMEOUT_S = 25 * 60
+VERDICT_TIMEOUT_S = 5 * 60
+FINDING_RECURSION_LIMIT = 400
+VERDICT_RECURSION_LIMIT = 60
 MAX_RETRIES = 1
-# The orchestrator delegates to a subagent per rule, each making several tool
-# calls — give the run plenty of graph steps.
-RECURSION_LIMIT = 300
 
-_KICKOFF = (
-    "Audit this payment dossier from its mined data: check completeness, evaluate "
-    "every applicable rule (delegating each to the rule_auditor subagent), record "
-    "your findings, and set a single verdict."
+_FIND_KICKOFF = (
+    "Investigate this payment dossier from its mined data: check completeness and "
+    "evaluate every applicable rule (delegating to the rule_auditor subagent), "
+    "recording your findings. Do not set a verdict."
+)
+_VERDICT_KICKOFF = (
+    "Review the recorded findings for this dossier and set a single verdict "
+    "(pass / needs_review / fail) with a rationale."
 )
 
 
@@ -45,24 +53,46 @@ async def run_audit(
     eid = UUID(audit_execution_id)
     await runs.mark_running(eid)
     try:
-        agent = build_audit_agent(
+        await clients.audit.clear(eid)  # idempotent: a retry starts clean
+
+        # Phase 1 — finding (own context / checkpoint thread)
+        finder = build_finding_agent(
             clients=clients,
             mining_execution_id=UUID(mining_execution_id),
+            audit_execution_id=eid,
+            dossier_key=dossier_key,
+            checkpointer=get_saver(),
+        )
+        await asyncio.wait_for(
+            finder.ainvoke(
+                {"messages": [HumanMessage(_FIND_KICKOFF)]},
+                config={
+                    "configurable": {"thread_id": f"{thread_id}:find"},
+                    "recursion_limit": FINDING_RECURSION_LIMIT,
+                },
+            ),
+            timeout=FINDING_TIMEOUT_S,
+        )
+
+        # Phase 2 — verdict (separate fresh context / checkpoint thread)
+        verdicter = build_verdict_agent(
+            clients=clients,
             audit_execution_id=eid,
             dossier_key=dossier_key,
             document_id=UUID(document_id),
             checkpointer=get_saver(),
         )
         await asyncio.wait_for(
-            agent.ainvoke(
-                {"messages": [HumanMessage(_KICKOFF)]},
+            verdicter.ainvoke(
+                {"messages": [HumanMessage(_VERDICT_KICKOFF)]},
                 config={
-                    "configurable": {"thread_id": thread_id},
-                    "recursion_limit": RECURSION_LIMIT,
+                    "configurable": {"thread_id": f"{thread_id}:verdict"},
+                    "recursion_limit": VERDICT_RECURSION_LIMIT,
                 },
             ),
-            timeout=TIMEOUT_S,
+            timeout=VERDICT_TIMEOUT_S,
         )
+
         verdict = await clients.audit.get_verdict(eid)
         findings = await clients.audit.list_findings(eid)
         output = {
@@ -77,7 +107,7 @@ async def run_audit(
     except TimeoutError as exc:
         meta = await final_metadata(runs, eid, thread_id)
         await runs.mark_failed(
-            eid, WorkflowResult(error=f"timed out after {TIMEOUT_S}s"), meta
+            eid, WorkflowResult(error="audit phase timed out"), meta
         )
         raise TaskTimeout(audit_execution_id) from exc
     except Exception as exc:

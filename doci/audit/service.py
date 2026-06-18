@@ -102,6 +102,17 @@ class AuditService:
 
     @with_span(kind=SpanKind.CLIENT)
     @with_metrics()
+    async def clear(self, execution_id: UUID) -> None:
+        """Delete this run's findings + verdict (so a retried audit starts clean)."""
+        await self._pg.execute(
+            "DELETE FROM audit_finding WHERE execution_id = %s", [execution_id]
+        )
+        await self._pg.execute(
+            "DELETE FROM audit_verdict WHERE execution_id = %s", [execution_id]
+        )
+
+    @with_span(kind=SpanKind.CLIENT)
+    @with_metrics()
     async def get_verdict(self, execution_id: UUID) -> AuditVerdict | None:
         """The run's verdict, or ``None`` if not set yet."""
         row = await self._pg.fetch_one(

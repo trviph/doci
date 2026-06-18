@@ -1,10 +1,13 @@
-"""Tool: a viewable image URL for one page (fallback visual check).
+"""Tool: show a page's image to the model (fallback visual check).
 
 Service-backed (factory). Most visual evidence (signatures, stamps, IMEI) is
 captured as facts at annotation time; this is the fallback for when the agent
-must actually look. Returns a short-lived presigned URL for the page's image.
+must actually look. Returns the page image as a content block the (multimodal)
+model can view — used only when the extracted text/annotation can't verify
+something. Never raises.
 """
 
+import base64
 from uuid import UUID
 
 from langchain_core.tools import StructuredTool, tool
@@ -14,9 +17,10 @@ from doci.postgres import Postgres
 
 
 def build_get_page_image(media: MediaService, postgres: Postgres) -> StructuredTool:
-    async def get_page_image(part_id: str) -> dict:
-        """Get a presigned image URL for a page by part_id — only when you must
-        visually inspect it (most evidence is already in the annotation facts)."""
+    async def get_page_image(part_id: str):
+        """Look at a page's image by part_id — only when you must visually inspect
+        it (most evidence is already in the annotation facts). Returns the image
+        for you to view."""
         try:
             pid = UUID(part_id)
         except (ValueError, TypeError):
@@ -27,7 +31,12 @@ def build_get_page_image(media: MediaService, postgres: Postgres) -> StructuredT
         if row is None or row.get("media_id") is None:
             return {"ok": False, "error": f"no page image for part {part_id}."}
         rec = await media.get(row["media_id"])
-        url = await media.view_url(rec.object_key)
-        return {"ok": True, "part_id": part_id, "image_url": url, "mime_type": rec.mime_type}
+        data = await media.download(row["media_id"])
+        b64 = base64.b64encode(data).decode("ascii")
+        mime = rec.mime_type or "image/png"
+        return [
+            {"type": "text", "text": f"Page image for part {part_id}:"},
+            {"type": "image", "source_type": "base64", "mime_type": mime, "data": b64},
+        ]
 
     return tool(get_page_image)

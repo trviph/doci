@@ -1,10 +1,11 @@
-"""The audit orchestrator: a deepagents deep agent that audits one dossier.
+"""The audit finding agent: a deepagents deep agent that investigates one dossier.
 
 Builds the orchestrator + the ``rule_auditor`` subagent over the run's tools
 (bound to the mining/audit execution ids, dossier, and document). The
-orchestrator runs the completeness pass itself and delegates each applicable rule
-to the subagent, then sets the dossier verdict. Tools are assembled from the
-``doci.tools`` factories; the LLM decides which to use (it has ``find_tools``).
+orchestrator runs the completeness pass and delegates the rules to the subagent
+(its own judgement of how many rules per task), **recording findings only** — the
+verdict is a separate phase. Tools come from the ``doci.tools`` factories; the LLM
+decides which to use (it has ``find_tools``).
 """
 
 from typing import TYPE_CHECKING
@@ -38,7 +39,6 @@ from doci.tools.parse_money import parse_money_tool
 from doci.tools.record_finding import build_record_finding
 from doci.tools.registry import ToolRegistry
 from doci.tools.search_knowledge import build_search_knowledge
-from doci.tools.set_verdict import build_set_verdict
 from doci.tools.validate_tax_id import validate_tax_id_tool
 
 if TYPE_CHECKING:
@@ -86,20 +86,20 @@ _DETERMINISTIC = [
 ]
 
 
-def build_audit_agent(
+def build_finding_agent(
     *,
     clients: "Clients",
     mining_execution_id: UUID,
     audit_execution_id: UUID,
     dossier_key: str,
-    document_id: UUID,
     model: BaseChatModel | None = None,
     checkpointer: BaseCheckpointSaver | None = None,
 ) -> CompiledStateGraph:
-    """Build the audit deep agent for one dossier run.
+    """Build the finding (investigation) agent for one dossier run.
 
     ``mining_execution_id`` keys the mined results; ``audit_execution_id`` is the
-    audit run findings/verdict hang off. The dossier/document scope the tools.
+    audit run findings hang off. Records findings only — the verdict is a separate
+    phase (see :func:`doci.agents.audit_verdict.build_verdict_agent`).
     """
     model = model or build_chat_model(
         LLM_TASK,
@@ -122,15 +122,14 @@ def build_audit_agent(
     # reference knowledge
     search_kb = build_search_knowledge(clients.userdata_knowledge)
     get_kb = build_get_knowledge(clients.userdata_knowledge)
-    # output (keyed to the audit run)
+    # output (keyed to the audit run) — findings only; verdict is a separate phase
     record = build_record_finding(clients.audit, audit_execution_id)
-    verdict = build_set_verdict(clients.audit, audit_execution_id, dossier_key, document_id)
 
     # rule subagent: evidence + deterministic + knowledge + record_finding
     sub_base = [*evidence, search_kb, get_kb, record, *_DETERMINISTIC]
     rule_sub = build_rule_auditor(sub_base, _TAGS, model)
 
-    # orchestrator: requirements + coverage + knowledge + record + verdict
+    # orchestrator: requirements + coverage + knowledge + record
     orch_base = [
         build_get_dossier_spec(
             clients.userdata_dossier_defs, clients.userdata_document_defs, dossier_key
@@ -141,7 +140,6 @@ def build_audit_agent(
         search_kb,
         get_kb,
         record,
-        verdict,
     ]
     registry = ToolRegistry().add((t, _TAGS.get(t.name, ())) for t in orch_base)
     orch_tools = [*orch_base, build_find_tools(registry)]
