@@ -7,6 +7,7 @@ here keeps the two in sync.
 
 from dataclasses import dataclass, replace
 
+from doci.audit import AuditService
 from doci.cache import Cache, CacheMode
 from doci.documents import DocumentService
 from doci.kvstore import KV, KVConfig
@@ -36,6 +37,7 @@ class Clients:
     userdata_document_defs: DocumentDefService
     userdata_agent_rules: AgentRuleService
     userdata_knowledge: KnowledgeService
+    audit: AuditService
 
 
 def build_clients() -> Clients:
@@ -66,6 +68,7 @@ def build_clients() -> Clients:
     userdata_document_defs = DocumentDefService(postgres=pg)
     userdata_agent_rules = AgentRuleService(postgres=pg)
     userdata_knowledge = KnowledgeService(postgres=pg)
+    audit = AuditService(postgres=pg)
     return Clients(
         postgres=pg,
         objstore=obj,
@@ -78,6 +81,7 @@ def build_clients() -> Clients:
         userdata_document_defs=userdata_document_defs,
         userdata_agent_rules=userdata_agent_rules,
         userdata_knowledge=userdata_knowledge,
+        audit=audit,
     )
 
 
