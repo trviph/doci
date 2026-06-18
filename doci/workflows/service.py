@@ -124,26 +124,6 @@ class WorkflowExecutionService:
             raise WorkflowExecutionNotFound(str(execution_id))
         return WorkflowExecutionRecord.from_row(row)
 
-    @with_span(kind=SpanKind.CLIENT)
-    @with_metrics()
-    async def latest_succeeded(
-        self, entity_id: UUID, workflow: str | None = None
-    ) -> WorkflowExecutionRecord | None:
-        """The most recent SUCCEEDED run for ``entity_id`` (optionally a given
-        ``workflow``); ``None`` if there is none. Used to find the mining run an
-        audit reads from."""
-        clauses = ["entity_id = %s", "status = %s"]
-        params: list = [entity_id, int(WorkflowStatus.SUCCEEDED)]
-        if workflow is not None:
-            clauses.append("workflow = %s")
-            params.append(workflow)
-        row = await self._pg.fetch_one(
-            f"SELECT {_COLS} FROM workflow_execution WHERE {' AND '.join(clauses)} "
-            "ORDER BY created_at DESC, id LIMIT 1",
-            params,
-        )
-        return WorkflowExecutionRecord.from_row(row) if row else None
-
     async def _finish(
         self,
         execution_id: UUID,

@@ -7,29 +7,23 @@ run's status, verdict, and findings. Resolves ``app.state.workflow_runs`` /
 """
 
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from doci.audit import AuditService
-from doci.workflows.audit.task import run_audit
-from doci.workflows.models import (
-    LangGraphMeta,
-    WorkflowInput,
-    WorkflowMetadata,
-    WorkflowStatus,
-)
+from doci.workflows.audit.trigger import enqueue_audit
+from doci.workflows.models import WorkflowStatus
 from doci.workflows.service import WorkflowExecutionNotFound, WorkflowExecutionService
 
 
 class SubmitAuditRequest(BaseModel):
     document_id: UUID
     dossier_key: str
-    mining_execution_id: UUID | None = Field(
-        default=None,
-        description="Mining run whose results to audit; defaults to the document's "
-        "latest succeeded document_mining run.",
+    mining_execution_id: UUID = Field(
+        description="The specific succeeded mining run whose results to audit "
+        "(audits normally auto-chain off mining; this is for a manual re-audit).",
     )
 
 
@@ -76,37 +70,15 @@ def build_audit_router(
         body: SubmitAuditRequest = Body(...),
         runs_svc: WorkflowExecutionService = Depends(_runs),
     ) -> AuditJobModel:
-        mining_eid = body.mining_execution_id
-        if mining_eid is None:
-            rec = await runs_svc.latest_succeeded(
-                body.document_id, workflow="document_mining"
-            )
-            if rec is None:
-                raise HTTPException(
-                    status.HTTP_404_NOT_FOUND,
-                    "no succeeded mining run for this document; pass mining_execution_id",
-                )
-            mining_eid = rec.id
-        thread_id = uuid4()
-        execution_id = await runs_svc.create(
-            workflow="audit",
-            entity_type="document",
-            entity_id=body.document_id,
-            input=WorkflowInput(
-                document_id=body.document_id, dossier_key=body.dossier_key
-            ),
-            metadata=WorkflowMetadata(langgraph=LangGraphMeta(thread_id=str(thread_id))),
-        )
-        await run_audit.kiq(
-            str(body.document_id),
-            str(execution_id),
-            str(mining_eid),
-            str(thread_id),
-            body.dossier_key,
+        execution_id = await enqueue_audit(
+            runs_svc,
+            document_id=body.document_id,
+            mining_execution_id=body.mining_execution_id,
+            dossier_key=body.dossier_key,
         )
         return AuditJobModel(
             execution_id=execution_id,
-            mining_execution_id=mining_eid,
+            mining_execution_id=body.mining_execution_id,
             document_id=body.document_id,
             dossier_key=body.dossier_key,
         )
