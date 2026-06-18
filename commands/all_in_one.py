@@ -22,7 +22,7 @@ from doci.scheduler import scheduler
 from doci.taskiq.broker import broker
 
 # Import task modules so their @broker.task / event handlers register on import.
-import doci.workflows.audit.task  # noqa: F401, E402
+import doci.workflows.langgraph_audit.task  # noqa: F401, E402
 import doci.workflows.langgraph_document_mining.task  # noqa: F401, E402
 import doci.workflows.langgraph_document_mining_image.task  # noqa: F401, E402
 import doci.workflows.langgraph_document_mining_pdf.task  # noqa: F401, E402

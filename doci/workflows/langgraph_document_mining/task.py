@@ -12,7 +12,7 @@ from uuid import UUID
 from doci.activities import FinalizeDocument
 from doci.taskiq import broker
 from doci.taskiq.retry import TaskTimeout
-from doci.workflows.audit.trigger import enqueue_audit
+from doci.workflows.langgraph_audit.trigger import enqueue_audit
 from doci.workflows.langgraph_document_mining.graph import (
     build_document_mining_graph,
 )

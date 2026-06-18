@@ -26,7 +26,7 @@ from doci.userdata.dossiers import build_dossiers_router
 from doci.userdata.documents import build_document_defs_router
 from doci.userdata.knowledge import build_knowledge_router
 from doci.userdata.rules import build_agent_rules_router
-from doci.workflows.audit import build_audit_router
+from doci.workflows.langgraph_audit import build_audit_router
 from doci.workflows.router import build_workflows_router
 
 

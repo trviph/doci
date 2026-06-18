@@ -1,9 +1,9 @@
 """FastAPI router to submit + read audit jobs.
 
-``POST /audits`` enqueues an audit of a document's mined dossier (defaulting to
-the document's latest succeeded mining run); ``GET /audits/{id}`` returns the
-run's status, verdict, and findings. Resolves ``app.state.workflow_runs`` /
-``app.state.audit`` when services are not explicitly bound.
+``POST /audits`` enqueues an audit of a document's mined dossier for a specific
+mining run; ``GET /audits/{id}`` returns the run's status, verdict, and findings.
+Resolves ``app.state.workflow_runs`` / ``app.state.audit`` when services are not
+explicitly bound. (Audits normally auto-chain off mining success.)
 """
 
 from typing import Any
@@ -13,7 +13,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from doci.audit import AuditService
-from doci.workflows.audit.trigger import enqueue_audit
+from doci.workflows.langgraph_audit.trigger import enqueue_audit
 from doci.workflows.models import WorkflowStatus
 from doci.workflows.service import WorkflowExecutionNotFound, WorkflowExecutionService
 

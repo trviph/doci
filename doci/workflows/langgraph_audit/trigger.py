@@ -8,7 +8,7 @@ deterministic audit with no race.
 
 from uuid import UUID, uuid4
 
-from doci.workflows.audit.task import run_audit
+from doci.workflows.langgraph_audit.task import run_audit
 from doci.workflows.models import LangGraphMeta, WorkflowInput, WorkflowMetadata
 from doci.workflows.service import WorkflowExecutionService
 
