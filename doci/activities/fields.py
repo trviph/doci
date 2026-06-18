@@ -21,24 +21,25 @@ class FieldSpec(BaseModel):
     )
 
 
-class GroupItemSpec(BaseModel):
-    """One candidate document type within a dossier group, for classification."""
+class DossierItemSpec(BaseModel):
+    """One candidate document type within a dossier, for classification."""
 
     key: str = Field(description="stable key of this document type")
     name: str = Field(description="human name, e.g. 'VAT Invoice'")
     description: str | None = Field(
         default=None, description="what this document is / how to recognize it"
     )
-    fields: list[FieldSpec] = Field(
-        default_factory=list, description="fields to extract for this document type"
+    look_for: str | None = Field(
+        default=None,
+        description="plaintext note on what to look for / extract from this document",
     )
 
 
-class GroupSpec(BaseModel):
-    """A dossier group handed to annotate: classify the page to one item, then
-    extract that item's ``fields``. Built by the user data layer from a
-    ``document_group`` and its items."""
+class DossierSpec(BaseModel):
+    """A dossier handed to annotate: classify the page to one item, then extract
+    the facts its ``look_for`` calls out. Built by the user data layer from a
+    ``dossier_def`` and its ``document_def`` rows."""
 
     key: str
     name: str
-    items: list[GroupItemSpec] = Field(default_factory=list)
+    items: list[DossierItemSpec] = Field(default_factory=list)

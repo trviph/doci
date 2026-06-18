@@ -48,10 +48,10 @@ class SubmitWorkflowRequest(BaseModel):
     workflow: WorkflowKind = Field(
         default=WorkflowKind.DOCUMENT_MINING, description="Which workflow to run."
     )
-    group_key: str | None = Field(
+    dossier_key: str | None = Field(
         default=None,
-        description="Optional dossier group key; annotate classifies each page "
-        "against the group's document types and extracts their fields.",
+        description="Optional dossier key; annotate classifies each page against "
+        "the dossier's document types and extracts the facts their look_for calls out.",
     )
 
 
@@ -101,7 +101,9 @@ def build_workflows_router(
             workflow=body.workflow.value,
             entity_type="document",
             entity_id=body.document_id,
-            input=WorkflowInput(document_id=body.document_id, group_key=body.group_key),
+            input=WorkflowInput(
+                document_id=body.document_id, dossier_key=body.dossier_key
+            ),
             metadata=WorkflowMetadata(
                 langgraph=LangGraphMeta(thread_id=str(thread_id))
             ),
@@ -110,7 +112,7 @@ def build_workflows_router(
             str(body.document_id),
             str(execution_id),
             str(thread_id),
-            body.group_key,
+            body.dossier_key,
         )
         await runs.set_metadata(
             execution_id,
