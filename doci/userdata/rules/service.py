@@ -15,7 +15,7 @@ from psycopg2.extras import register_uuid
 from doci.postgres import Postgres
 from doci.telemetry import traced, with_metrics, with_span
 from doci.userdata.common import ListPage, _page_bounds, gen_key
-from doci.userdata.dossiers.models import Dossier
+from doci.userdata.dossiers.models import DossierDef
 from doci.userdata.errors import DuplicateKey, NotFound
 from doci.userdata.rules.models import AgentRule
 
@@ -129,14 +129,14 @@ class AgentRuleService:
             dossier_ids: list = []
             if wanted:
                 rows = await tx.fetch_all(
-                    f"SELECT id, key FROM dossier "
+                    f"SELECT id, key FROM dossier_def "
                     "WHERE key = ANY(%s) AND deleted_at IS NULL",
                     [wanted],
                 )
                 found = {r["key"]: r["id"] for r in rows}
                 missing = [k for k in wanted if k not in found]
                 if missing:
-                    raise NotFound(f"dossier {missing[0]!r}")
+                    raise NotFound(f"dossier_def {missing[0]!r}")
                 dossier_ids = [found[k] for k in wanted]
             await tx.execute(
                 "DELETE FROM agent_rule_dossier WHERE rule_id = %s", [rule["id"]]
@@ -151,7 +151,7 @@ class AgentRuleService:
 
     @with_span(kind=SpanKind.CLIENT)
     @with_metrics()
-    async def dossiers_for_rule(self, rule_key: str) -> list[Dossier]:
+    async def dossiers_for_rule(self, rule_key: str) -> list[DossierDef]:
         """List the (non-deleted) dossiers a rule is linked to."""
         rule = await self._pg.fetch_one(
             "SELECT id FROM agent_rule WHERE key = %s AND deleted_at IS NULL",
@@ -161,23 +161,23 @@ class AgentRuleService:
             raise NotFound(f"agent_rule {rule_key!r}")
         rows = await self._pg.fetch_all(
             f"SELECT {', '.join('d.' + c for c in _DOSSIER_COLS.split(', '))} "
-            "FROM agent_rule_dossier l JOIN dossier d ON d.id = l.dossier_id "
+            "FROM agent_rule_dossier l JOIN dossier_def d ON d.id = l.dossier_id "
             "WHERE l.rule_id = %s AND d.deleted_at IS NULL "
             "ORDER BY d.created_at DESC, d.id",
             [rule["id"]],
         )
-        return [Dossier.from_row(r) for r in rows]
+        return [DossierDef.from_row(r) for r in rows]
 
     @with_span(kind=SpanKind.CLIENT)
     @with_metrics()
     async def rules_for_dossier(self, dossier_key: str) -> list[AgentRule]:
         """List the (non-deleted) rules linked to a dossier."""
         dossier = await self._pg.fetch_one(
-            "SELECT id FROM dossier WHERE key = %s AND deleted_at IS NULL",
+            "SELECT id FROM dossier_def WHERE key = %s AND deleted_at IS NULL",
             [dossier_key],
         )
         if dossier is None:
-            raise NotFound(f"dossier {dossier_key!r}")
+            raise NotFound(f"dossier_def {dossier_key!r}")
         rows = await self._pg.fetch_all(
             f"SELECT {', '.join('r.' + c for c in _COLS.split(', '))} "
             "FROM agent_rule_dossier l JOIN agent_rule r ON r.id = l.rule_id "

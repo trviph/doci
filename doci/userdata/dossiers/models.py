@@ -1,6 +1,6 @@
 """Value object for a dossier definition (framework-agnostic).
 
-A :class:`Dossier` is a named kind of case file — e.g. "payment request",
+A :class:`DossierDef` is a named kind of case file — e.g. "payment request",
 "marketing", "outsourcing software" — carrying only a name and a free-text
 description. The documents it expects live in the ``document_def`` table (m‑1),
 and the agent rules that run against it via the ``agent_rule_dossier`` link (m‑n).
@@ -13,7 +13,7 @@ from uuid import UUID
 
 
 @dataclass(frozen=True, slots=True)
-class Dossier:
+class DossierDef:
     """A dossier definition: a name + a plaintext description."""
 
     id: UUID
@@ -25,7 +25,7 @@ class Dossier:
     updated_at: datetime
 
     @classmethod
-    def from_row(cls, row: dict[str, Any]) -> "Dossier":
+    def from_row(cls, row: dict[str, Any]) -> "DossierDef":
         return cls(
             id=row["id"],
             key=row["key"],

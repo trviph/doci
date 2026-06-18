@@ -14,7 +14,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 
-from doci.userdata.dossiers.service import DossierService
+from doci.userdata.dossiers.service import DossierDefService
 from doci.userdata.errors import DuplicateKey, NotFound
 from doci.userdata.rules.router import RuleModel
 
@@ -70,16 +70,16 @@ def _map_errors() -> Iterator[None]:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
 
 
-def build_dossiers_router(bound: DossierService | None = None) -> APIRouter:
+def build_dossiers_router(bound: DossierDefService | None = None) -> APIRouter:
     """Build the dossiers APIRouter. Resolves ``app.state.userdata_dossiers``."""
     r = APIRouter(prefix="/dossiers", tags=["dossiers"])
 
-    def _svc(request: Request) -> DossierService:
-        return bound if bound is not None else request.app.state.userdata_dossiers
+    def _svc(request: Request) -> DossierDefService:
+        return bound if bound is not None else request.app.state.userdata_dossier_defs
 
     @r.post("", status_code=status.HTTP_201_CREATED, summary="Create a dossier")
     async def create(
-        body: DossierCreate, svc: DossierService = Depends(_svc)
+        body: DossierCreate, svc: DossierDefService = Depends(_svc)
     ) -> DossierModel:
         with _map_errors():
             return DossierModel.model_validate(
@@ -92,7 +92,7 @@ def build_dossiers_router(bound: DossierService | None = None) -> APIRouter:
     async def list_dossiers(
         limit: int | None = None,
         offset: int = 0,
-        svc: DossierService = Depends(_svc),
+        svc: DossierDefService = Depends(_svc),
     ) -> DossierListPageModel:
         return DossierListPageModel.model_validate(
             await svc.list_dossiers(limit=limit, offset=offset)
@@ -100,14 +100,14 @@ def build_dossiers_router(bound: DossierService | None = None) -> APIRouter:
 
     @r.get("/{key}", summary="Get a dossier", responses={404: {}})
     async def get_dossier(
-        key: str, svc: DossierService = Depends(_svc)
+        key: str, svc: DossierDefService = Depends(_svc)
     ) -> DossierModel:
         with _map_errors():
             return DossierModel.model_validate(await svc.get_dossier(key))
 
     @r.patch("/{key}", summary="Update a dossier", responses={404: {}})
     async def update_dossier(
-        key: str, body: DossierUpdate, svc: DossierService = Depends(_svc)
+        key: str, body: DossierUpdate, svc: DossierDefService = Depends(_svc)
     ) -> DossierModel:
         with _map_errors():
             return DossierModel.model_validate(
@@ -118,7 +118,7 @@ def build_dossiers_router(bound: DossierService | None = None) -> APIRouter:
 
     @r.delete("/{key}", summary="Soft-delete a dossier")
     async def delete_dossier(
-        key: str, svc: DossierService = Depends(_svc)
+        key: str, svc: DossierDefService = Depends(_svc)
     ) -> DeleteResult:
         return DeleteResult(deleted=await svc.delete_dossiers([key]))
 

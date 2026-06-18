@@ -19,6 +19,9 @@ from doci.userdata import (
     DocumentGroupService,
     ReferenceDataService,
 )
+from doci.userdata.dossiers import DossierDefService
+from doci.userdata.documents import DocumentDefService
+from doci.userdata.rules import AgentRuleService
 from doci.workflows import WorkflowExecutionService
 
 
@@ -36,6 +39,9 @@ class Clients:
     userdata_groups: DocumentGroupService
     userdata_rules: AuditRuleService
     userdata_refdata: ReferenceDataService
+    userdata_dossier_defs: DossierDefService
+    userdata_document_defs: DocumentDefService
+    userdata_agent_rules: AgentRuleService
 
 
 def build_clients() -> Clients:
@@ -65,6 +71,9 @@ def build_clients() -> Clients:
     userdata_groups = DocumentGroupService(postgres=pg)
     userdata_rules = AuditRuleService(postgres=pg)
     userdata_refdata = ReferenceDataService(postgres=pg)
+    userdata_dossier_defs = DossierDefService(postgres=pg)
+    userdata_document_defs = DocumentDefService(postgres=pg)
+    userdata_agent_rules = AgentRuleService(postgres=pg)
     return Clients(
         postgres=pg,
         objstore=obj,
@@ -76,6 +85,9 @@ def build_clients() -> Clients:
         userdata_groups=userdata_groups,
         userdata_rules=userdata_rules,
         userdata_refdata=userdata_refdata,
+        userdata_dossier_defs=userdata_dossier_defs,
+        userdata_document_defs=userdata_document_defs,
+        userdata_agent_rules=userdata_agent_rules,
     )
 
 

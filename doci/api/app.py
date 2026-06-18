@@ -23,6 +23,9 @@ from doci.health import HealthService, build_health_router
 from doci.helpers import HttpRequestContextMiddleware, InternalAccessError
 from doci.taskiq import broker as _taskiq_broker
 from doci.userdata import build_userdata_router
+from doci.userdata.dossiers import build_dossiers_router
+from doci.userdata.documents import build_document_defs_router
+from doci.userdata.rules import build_agent_rules_router
 from doci.workflows.router import build_workflows_router
 
 
@@ -42,6 +45,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.userdata_groups = clients.userdata_groups
     app.state.userdata_rules = clients.userdata_rules
     app.state.userdata_refdata = clients.userdata_refdata
+    app.state.userdata_dossier_defs = clients.userdata_dossier_defs
+    app.state.userdata_document_defs = clients.userdata_document_defs
+    app.state.userdata_agent_rules = clients.userdata_agent_rules
     await _taskiq_broker.startup()
     # Start asyncio runtime metrics (task count + event-loop lag) now that we're
     # inside the running loop; system/process metrics were registered at import.
@@ -74,6 +80,9 @@ def create_app() -> FastAPI:
     app.include_router(build_documents_router())
     app.include_router(build_workflows_router())
     app.include_router(build_userdata_router())
+    app.include_router(build_dossiers_router())
+    app.include_router(build_document_defs_router())
+    app.include_router(build_agent_rules_router())
     FastAPIInstrumentor.instrument_app(
         app,
         tracer_provider=telemetry.TRACER_PROVIDER,

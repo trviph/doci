@@ -93,11 +93,11 @@ class DocumentDefService:
     # region private
     async def _dossier_id(self, dossier_key: str):
         row = await self._pg.fetch_one(
-            "SELECT id FROM dossier WHERE key = %s AND deleted_at IS NULL",
+            "SELECT id FROM dossier_def WHERE key = %s AND deleted_at IS NULL",
             [dossier_key],
         )
         if row is None:
-            raise NotFound(f"dossier {dossier_key!r}")
+            raise NotFound(f"dossier_def {dossier_key!r}")
         return row["id"]
 
     # endregion

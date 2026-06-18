@@ -2,7 +2,7 @@
 -- rule shapes (reference datasets are unchanged, see the v1 migration). Four
 -- plaintext concerns:
 --
---   1. dossier — a named case-file type ("payment request", "marketing", ...),
+--   1. dossier_def — a named case-file type ("payment request", "marketing", ...),
 --      just a name + free-text description.
 --   2. document_def — one kind of document expected within a dossier (m-1), with
 --      an optional plaintext `look_for` note on what to look for.
@@ -18,9 +18,9 @@
 -- Built alongside the legacy v1 userdata tables (document_group / audit_rule /
 -- reference_dataset), which stay live until the mining pipeline is migrated.
 
--- region dossiers ------------------------------------------------------------
+-- region dossier definitions -------------------------------------------------
 
-CREATE TABLE dossier (
+CREATE TABLE dossier_def (
     id          UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
     key         VARCHAR(255) NOT NULL,
     name        VARCHAR(255) NOT NULL,
@@ -30,8 +30,8 @@ CREATE TABLE dossier (
     updated_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 
-CREATE UNIQUE INDEX idx_dossier_key        ON dossier (key) WHERE deleted_at IS NULL;
-CREATE INDEX        idx_dossier_created_at ON dossier (created_at DESC);
+CREATE UNIQUE INDEX idx_dossier_def_key        ON dossier_def (key) WHERE deleted_at IS NULL;
+CREATE INDEX        idx_dossier_def_created_at ON dossier_def (created_at DESC);
 
 -- endregion
 
@@ -41,7 +41,7 @@ CREATE INDEX        idx_dossier_created_at ON dossier (created_at DESC);
 -- free-text note on what to look for. `(dossier_id, key)` is the upsert key.
 CREATE TABLE document_def (
     id          UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
-    dossier_id  UUID         NOT NULL REFERENCES dossier(id) ON DELETE CASCADE,
+    dossier_id  UUID         NOT NULL REFERENCES dossier_def(id) ON DELETE CASCADE,
     key         VARCHAR(255) NOT NULL,
     name        VARCHAR(255) NOT NULL,
     description TEXT,
@@ -73,8 +73,8 @@ CREATE INDEX        idx_agent_rule_created_at ON agent_rule (created_at DESC);
 
 -- The m-n link between rules and dossiers. Both sides cascade on hard delete.
 CREATE TABLE agent_rule_dossier (
-    rule_id    UUID NOT NULL REFERENCES agent_rule(id) ON DELETE CASCADE,
-    dossier_id UUID NOT NULL REFERENCES dossier(id)    ON DELETE CASCADE,
+    rule_id    UUID NOT NULL REFERENCES agent_rule(id)  ON DELETE CASCADE,
+    dossier_id UUID NOT NULL REFERENCES dossier_def(id) ON DELETE CASCADE,
     PRIMARY KEY (rule_id, dossier_id)
 );
 
