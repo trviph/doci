@@ -16,7 +16,7 @@ class DocumentMiningImageState(TypedDict, total=False):
     part_id: UUID  # input: the document_part this run produces results/thumb for
     document_id: UUID  # input: the owning document (threaded for parity; unused here)
     execution_id: UUID  # input (the workflow_execution row; used when saving results)
-    group_spec: dict | None  # input: dossier GroupSpec (dict) for group-aware annotate
+    dossier_spec: dict | None  # input: DossierSpec (dict) for dossier-aware annotate
     thumb_media_id: UUID | None  # set by the thumbnail node
     extract_ref: str | None  # disk path of the extracted Markdown (FIXME: db)
     annotation_ref: str | None  # disk path of the annotation JSON (FIXME: db)

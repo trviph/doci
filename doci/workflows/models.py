@@ -70,14 +70,14 @@ class WorkflowInput:
     """Snapshot of what was submitted to the workflow."""
 
     document_id: UUID
-    group_key: str | None = None  # optional dossier group for group-aware annotate
+    dossier_key: str | None = None  # optional dossier for dossier-aware annotate
     version: str = WORKFLOW_INPUT_VERSION
 
     def to_json(self) -> dict[str, Any]:
         return {
             "version": self.version,
             "document_id": str(self.document_id),
-            "group_key": self.group_key,
+            "dossier_key": self.dossier_key,
         }
 
     @classmethod
@@ -86,7 +86,7 @@ class WorkflowInput:
         _require_compatible(version, WORKFLOW_INPUT_VERSION)
         return cls(
             document_id=UUID(str(data["document_id"])),
-            group_key=data.get("group_key"),
+            dossier_key=data.get("dossier_key"),
             version=version,
         )
 

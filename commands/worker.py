@@ -12,6 +12,7 @@ import doci.telemetry  # noqa: F401
 import doci.taskiq  # noqa: F401
 
 # Import task modules so their @broker.task / event handlers register on import.
+import doci.workflows.langgraph_audit.task  # noqa: F401
 import doci.workflows.langgraph_document_mining.task  # noqa: F401
 import doci.workflows.langgraph_document_mining_image.task  # noqa: F401
 import doci.workflows.langgraph_document_mining_pdf.task  # noqa: F401

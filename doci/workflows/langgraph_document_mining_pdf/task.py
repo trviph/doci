@@ -13,7 +13,7 @@ from uuid import UUID
 from doci.documents import DocumentStatus
 from doci.taskiq import broker
 from doci.taskiq.retry import TaskTimeout
-from doci.workflows.groupspec import resolve_group_spec
+from doci.workflows.dossierspec import resolve_dossier_spec
 from doci.workflows.langgraph_document_mining_pdf.deps import build_pdf_graph
 from doci.workflows.models import WorkflowResult
 from doci.workflows.runtime import final_metadata, get_clients, get_saver
@@ -43,7 +43,7 @@ def _page_output(page: dict) -> dict:
 
 @broker.task(retry_on_error=True, max_retries=MAX_RETRIES)
 async def run_document_mining_pdf(
-    document_id: str, execution_id: str, thread_id: str, group_key: str | None = None
+    document_id: str, execution_id: str, thread_id: str, dossier_key: str | None = None
 ) -> dict:
     """Split + per-page extract/annotate/thumbnail a READY PDF ``document_id``.
 
@@ -68,14 +68,16 @@ async def run_document_mining_pdf(
             clients.workflow_results,
             checkpointer=get_saver(),
         )
-        group_spec = await resolve_group_spec(clients.userdata_groups, group_key)
+        dossier_spec = await resolve_dossier_spec(
+            clients.userdata_dossier_defs, clients.userdata_document_defs, dossier_key
+        )
         result = await asyncio.wait_for(
             graph.ainvoke(
                 {
                     "media_id": doc.media_id,
                     "document_id": did,
                     "execution_id": eid,
-                    "group_spec": group_spec,
+                    "dossier_spec": dossier_spec,
                 },
                 config={"configurable": {"thread_id": thread_id}},
             ),

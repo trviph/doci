@@ -13,7 +13,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from opentelemetry.trace import SpanKind
 from pydantic import BaseModel, Field
 
-from doci.activities.fields import FieldSpec, GroupSpec
+from doci.activities.fields import DossierSpec, FieldSpec
 from doci.prompts import load
 from doci.telemetry import traced, with_metrics, with_span
 
@@ -66,27 +66,24 @@ class TextAnnotation(BaseModel):
 
 
 def _user_prompt(
-    text: str, fields: Sequence[FieldSpec] | None, group: GroupSpec | None
+    text: str, fields: Sequence[FieldSpec] | None, dossier: DossierSpec | None
 ) -> str:
     """The per-call user message: instruction (+ classification or watchlist),
-    then the document. With a ``group`` the model classifies the text to one of
-    the dossier's document types and extracts that type's fields."""
-    if group is not None and group.items:
+    then the document. With a ``dossier`` the model classifies the text to one of
+    the dossier's document types and extracts the facts its ``look_for`` calls out."""
+    if dossier is not None and dossier.items:
         catalog = "\n".join(
             f"- {it.key}: {it.name}"
             + (f" — {it.description}" if it.description else "")
-            + (
-                f"\n    fields: {', '.join(f.name for f in it.fields)}"
-                if it.fields
-                else ""
-            )
-            for it in group.items
+            + (f"\n    look for: {it.look_for}" if it.look_for else "")
+            for it in dossier.items
         )
         instruction = (
-            f'This document is one document from the "{group.name}" dossier. '
+            f'This document is one document from the "{dossier.name}" dossier. '
             "Decide which ONE of these document types it is and set `item_key` to "
-            "that type's key (or null if none match). Then extract that type's "
-            f"fields into `facts` when present.\n\nDocument types:\n{catalog}"
+            "that type's key (or null if none match). Then extract any "
+            "audit-relevant facts its “look for” note calls out into "
+            f"`facts`.\n\nDocument types:\n{catalog}"
         )
     else:
         instruction = "Annotate the document below."
@@ -113,14 +110,15 @@ class AnnotateText:
         self,
         text: str,
         fields: Sequence[FieldSpec] | None = None,
-        group: GroupSpec | None = None,
+        dossier: DossierSpec | None = None,
     ) -> TextAnnotation:
         """Return a structured annotation of the ``text`` document.
 
-        With a ``group`` the text is classified to one of the dossier's document
-        types (``item_key``) and that type's fields are extracted; otherwise
-        ``fields`` is an optional flat watchlist extracted into ``facts``.
+        With a ``dossier`` the text is classified to one of its document types
+        (``item_key``) and the facts that type's ``look_for`` calls out are
+        extracted; otherwise ``fields`` is an optional flat watchlist extracted
+        into ``facts``.
         """
         return await self._model.ainvoke(
-            [SystemMessage(_SYSTEM), HumanMessage(_user_prompt(text, fields, group))]
+            [SystemMessage(_SYSTEM), HumanMessage(_user_prompt(text, fields, dossier))]
         )

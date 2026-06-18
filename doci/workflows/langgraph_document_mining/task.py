@@ -12,10 +12,11 @@ from uuid import UUID
 from doci.activities import FinalizeDocument
 from doci.taskiq import broker
 from doci.taskiq.retry import TaskTimeout
+from doci.workflows.langgraph_audit.trigger import enqueue_audit
 from doci.workflows.langgraph_document_mining.graph import (
     build_document_mining_graph,
 )
-from doci.workflows.groupspec import resolve_group_spec
+from doci.workflows.dossierspec import resolve_dossier_spec
 from doci.workflows.langgraph_document_mining_image.deps import build_image_graph
 from doci.workflows.langgraph_document_mining_pdf.deps import build_pdf_graph
 from doci.workflows.models import WorkflowResult
@@ -28,7 +29,7 @@ MAX_RETRIES = 3
 
 @broker.task(retry_on_error=True, max_retries=MAX_RETRIES)
 async def run_document_mining(
-    document_id: str, execution_id: str, thread_id: str, group_key: str | None = None
+    document_id: str, execution_id: str, thread_id: str, dossier_key: str | None = None
 ) -> dict:
     """Finalize + classify ``document_id`` and route it through the mining graph.
 
@@ -60,13 +61,15 @@ async def run_document_mining(
             pdf_graph=pdf_graph,
             checkpointer=get_saver(),
         )
-        group_spec = await resolve_group_spec(clients.userdata_groups, group_key)
+        dossier_spec = await resolve_dossier_spec(
+            clients.userdata_dossier_defs, clients.userdata_document_defs, dossier_key
+        )
         result = await asyncio.wait_for(
             graph.ainvoke(
                 {
                     "document_id": UUID(document_id),
                     "execution_id": eid,
-                    "group_spec": group_spec,
+                    "dossier_spec": dossier_spec,
                 },
                 config=config,
             ),
@@ -81,6 +84,14 @@ async def run_document_mining(
         }
         meta = await final_metadata(runs, eid, thread_id)
         await runs.mark_succeeded(eid, WorkflowResult(output=output), meta)
+        # Auto-chain an audit of this exact mining run when a dossier was given.
+        if dossier_key:
+            await enqueue_audit(
+                runs,
+                document_id=UUID(document_id),
+                mining_execution_id=eid,
+                dossier_key=dossier_key,
+            )
         return output
     except TimeoutError as exc:
         meta = await final_metadata(runs, eid, thread_id)
