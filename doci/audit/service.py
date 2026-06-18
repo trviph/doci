@@ -23,8 +23,7 @@ _FINDING_COLS = (
     "id, execution_id, rule_key, severity, status, message, evidence, created_at"
 )
 _VERDICT_COLS = (
-    "execution_id, dossier_key, document_id, verdict, rationale, "
-    "created_at, updated_at"
+    "execution_id, dossier_key, document_id, verdict, rationale, created_at, updated_at"
 )
 
 

@@ -19,7 +19,7 @@ def build_get_page_text(
         not enough to decide."""
         try:
             pid = UUID(part_id)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return {"ok": False, "error": f"{part_id!r} is not a valid part_id (UUID)."}
         row = await results.get(execution_id, pid, ResultKind.EXTRACT)
         if row is None:

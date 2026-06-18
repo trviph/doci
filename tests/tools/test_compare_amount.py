@@ -13,8 +13,12 @@ def test_beyond_tolerance():
 
 def test_custom_tolerance_min_semantics():
     # allowed = smaller of (tol_pct% of larger, tol_abs)
-    assert compare_amount("1000", "1010", tol_pct=2.0, tol_abs=1000)["match"] is True   # min(20.2,1000)
-    assert compare_amount("1000", "1010", tol_pct=5.0, tol_abs=5)["match"] is False     # min(50,5)=5 < 10
+    assert (
+        compare_amount("1000", "1010", tol_pct=2.0, tol_abs=1000)["match"] is True
+    )  # min(20.2,1000)
+    assert (
+        compare_amount("1000", "1010", tol_pct=5.0, tol_abs=5)["match"] is False
+    )  # min(50,5)=5 < 10
 
 
 def test_unparseable_is_not_a_mismatch():

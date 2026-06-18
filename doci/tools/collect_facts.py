@@ -26,7 +26,9 @@ def build_collect_facts(
             if row is None:
                 continue
             for f in row.content.get("facts", []) or []:
-                facts.append({**f, "page_number": p.page_number, "part_id": str(p.part_id)})
+                facts.append(
+                    {**f, "page_number": p.page_number, "part_id": str(p.part_id)}
+                )
         return {
             "ok": True,
             "item_key": item_key,

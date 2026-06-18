@@ -32,13 +32,21 @@ def to_money(value: object) -> float | None:
             s = s.replace(",", "")
     elif "," in s:
         parts = s.split(",")
-        if len(parts) > 1 and len(parts[0]) <= 3 and all(len(p) == 3 for p in parts[1:]):
+        if (
+            len(parts) > 1
+            and len(parts[0]) <= 3
+            and all(len(p) == 3 for p in parts[1:])
+        ):
             s = s.replace(",", "")  # thousands grouping
         else:
             s = s.replace(",", ".")  # decimal comma
     elif "." in s:
         parts = s.split(".")
-        if len(parts) > 1 and len(parts[0]) <= 3 and all(len(p) == 3 for p in parts[1:]):
+        if (
+            len(parts) > 1
+            and len(parts[0]) <= 3
+            and all(len(p) == 3 for p in parts[1:])
+        ):
             s = s.replace(".", "")  # thousands grouping
     try:
         f = float(s)

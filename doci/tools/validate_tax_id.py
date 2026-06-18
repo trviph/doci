@@ -27,7 +27,9 @@ def validate_tax_id(tax_code: str, valid_lengths: list[int] | None = None) -> di
         "valid": valid,
         "normalized": digits,
         "length": len(digits),
-        "reason": None if valid else f"tax code has {len(digits)} digits; expected one of {lengths}.",
+        "reason": None
+        if valid
+        else f"tax code has {len(digits)} digits; expected one of {lengths}.",
     }
 
 

@@ -19,7 +19,7 @@ def build_get_page_annotation(
         (from list_pages)."""
         try:
             pid = UUID(part_id)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return {"ok": False, "error": f"{part_id!r} is not a valid part_id (UUID)."}
         row = await results.get(execution_id, pid, ResultKind.ANNOTATION)
         if row is None:

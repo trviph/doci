@@ -17,9 +17,7 @@ from doci.userdata.errors import NotFound
 
 register_uuid()
 
-_COLS = (
-    "id, dossier_id, key, name, description, look_for, created_at, updated_at"
-)
+_COLS = "id, dossier_id, key, name, description, look_for, created_at, updated_at"
 
 
 @traced

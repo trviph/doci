@@ -39,7 +39,8 @@ class DocumentUpsert(BaseModel):
     key: str | None = Field(default=None, description="Defaults to a slug of name.")
     description: str | None = None
     look_for: str | None = Field(
-        default=None, description="Optional plaintext: what to look for in this document."
+        default=None,
+        description="Optional plaintext: what to look for in this document.",
     )
 
 
@@ -65,9 +66,7 @@ def build_document_defs_router(bound: DocumentDefService | None = None) -> APIRo
     r = APIRouter(prefix="/dossiers/{dossier_key}/documents", tags=["document-defs"])
 
     def _svc(request: Request) -> DocumentDefService:
-        return (
-            bound if bound is not None else request.app.state.userdata_document_defs
-        )
+        return bound if bound is not None else request.app.state.userdata_document_defs
 
     @r.get("", summary="List a dossier's document definitions", responses={404: {}})
     async def list_documents(
@@ -96,9 +95,7 @@ def build_document_defs_router(bound: DocumentDefService | None = None) -> APIRo
                 )
             )
 
-    @r.get(
-        "/{doc_key}", summary="Get a document definition", responses={404: {}}
-    )
+    @r.get("/{doc_key}", summary="Get a document definition", responses={404: {}})
     async def get_document(
         dossier_key: str, doc_key: str, svc: DocumentDefService = Depends(_svc)
     ) -> DocumentModel:
@@ -107,15 +104,11 @@ def build_document_defs_router(bound: DocumentDefService | None = None) -> APIRo
                 await svc.get_document(dossier_key, doc_key)
             )
 
-    @r.delete(
-        "/{doc_key}", summary="Delete a document definition", responses={404: {}}
-    )
+    @r.delete("/{doc_key}", summary="Delete a document definition", responses={404: {}})
     async def delete_document(
         dossier_key: str, doc_key: str, svc: DocumentDefService = Depends(_svc)
     ) -> DeleteResult:
         with _map_errors():
-            return DeleteResult(
-                deleted=await svc.delete_document(dossier_key, doc_key)
-            )
+            return DeleteResult(deleted=await svc.delete_document(dossier_key, doc_key))
 
     return r

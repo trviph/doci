@@ -49,9 +49,7 @@ def build_verdict_agent(
         build_list_findings(clients.audit, audit_execution_id),
         build_search_knowledge(clients.userdata_knowledge),
         build_get_knowledge(clients.userdata_knowledge),
-        build_set_verdict(
-            clients.audit, audit_execution_id, dossier_key, document_id
-        ),
+        build_set_verdict(clients.audit, audit_execution_id, dossier_key, document_id),
     ]
     return create_deep_agent(
         model=model,

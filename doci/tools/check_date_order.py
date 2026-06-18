@@ -23,7 +23,9 @@ def check_date_order(dates: list[dict]) -> dict:
     for i, item in enumerate(dates or []):
         label = str(item.get("label", f"#{i}"))
         iso = to_date(item.get("date"))
-        (parsed if iso else unparsed).append({"label": label, "date": iso} if iso else label)
+        (parsed if iso else unparsed).append(
+            {"label": label, "date": iso} if iso else label
+        )
     violations = []
     for prev, cur in zip(parsed, parsed[1:]):
         if cur["date"] < prev["date"]:

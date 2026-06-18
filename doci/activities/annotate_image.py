@@ -96,7 +96,9 @@ def _fields_block(fields: Sequence[FieldSpec]) -> str:
     )
 
 
-def _user_prompt(fields: Sequence[FieldSpec] | None, dossier: DossierSpec | None) -> str:
+def _user_prompt(
+    fields: Sequence[FieldSpec] | None, dossier: DossierSpec | None
+) -> str:
     """The per-call user instruction.
 
     With a ``dossier`` the model classifies the image to one of its document
@@ -149,5 +151,8 @@ class AnnotateImage:
         into ``facts``.
         """
         return await self._model.ainvoke(
-            [SystemMessage(_SYSTEM), image_message(_user_prompt(fields, dossier), image)]
+            [
+                SystemMessage(_SYSTEM),
+                image_message(_user_prompt(fields, dossier), image),
+            ]
         )

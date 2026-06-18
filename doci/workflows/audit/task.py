@@ -106,9 +106,7 @@ async def run_audit(
         return output
     except TimeoutError as exc:
         meta = await final_metadata(runs, eid, thread_id)
-        await runs.mark_failed(
-            eid, WorkflowResult(error="audit phase timed out"), meta
-        )
+        await runs.mark_failed(eid, WorkflowResult(error="audit phase timed out"), meta)
         raise TaskTimeout(audit_execution_id) from exc
     except Exception as exc:
         meta = await final_metadata(runs, eid, thread_id)

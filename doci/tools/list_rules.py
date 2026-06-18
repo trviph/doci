@@ -18,7 +18,9 @@ def build_list_rules(rules: AgentRuleService, dossier_key: str) -> StructuredToo
             return {"ok": False, "error": f"could not load rules: {exc}"}
         return {
             "ok": True,
-            "rules": [{"key": r.key, "name": r.name, "body": r.body} for r in applicable],
+            "rules": [
+                {"key": r.key, "name": r.name, "body": r.body} for r in applicable
+            ],
         }
 
     return tool(list_rules)

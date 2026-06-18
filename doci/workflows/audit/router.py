@@ -83,7 +83,11 @@ def build_audit_router(
             dossier_key=body.dossier_key,
         )
 
-    @r.get("/{execution_id}", summary="Get an audit's status + findings", responses={404: {}})
+    @r.get(
+        "/{execution_id}",
+        summary="Get an audit's status + findings",
+        responses={404: {}},
+    )
     async def get_report(
         execution_id: UUID,
         runs_svc: WorkflowExecutionService = Depends(_runs),

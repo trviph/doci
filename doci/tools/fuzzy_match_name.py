@@ -36,7 +36,12 @@ def fuzzy_match_name(a: str, b: str, threshold: float = 85.0) -> dict:
             "error": f"need two non-empty names; got a={a!r}, b={b!r}.",
         }
     score = similarity(a, b)
-    return {"ok": True, "score": score, "match": score >= threshold, "threshold": threshold}
+    return {
+        "ok": True,
+        "score": score,
+        "match": score >= threshold,
+        "threshold": threshold,
+    }
 
 
 fuzzy_match_name_tool = tool(fuzzy_match_name)

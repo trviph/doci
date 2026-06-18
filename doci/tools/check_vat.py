@@ -27,14 +27,20 @@ def check_vat(
     "rate_valid"}``; on a parse failure returns ``{"ok": False, "error": ...}`` —
     fix the argument, do not treat it as a violation.
     """
-    rates = [0.0, 5.0, 8.0, 10.0] if allowed_rates is None else [float(r) for r in allowed_rates]
+    rates = (
+        [0.0, 5.0, 8.0, 10.0]
+        if allowed_rates is None
+        else [float(r) for r in allowed_rates]
+    )
     sub = to_money(subtotal)
     got = to_money(vat)
     try:
         rate_val = float(re.sub(r"[^0-9.]", "", str(rate)))
     except ValueError:
         rate_val = None
-    bad = [n for n, v in (("subtotal", sub), ("vat", got), ("rate", rate_val)) if v is None]
+    bad = [
+        n for n, v in (("subtotal", sub), ("vat", got), ("rate", rate_val)) if v is None
+    ]
     if bad:
         return {
             "ok": False,

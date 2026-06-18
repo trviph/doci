@@ -12,7 +12,9 @@ from langchain_core.tools import tool
 from doci.tools.parse_date import to_date
 
 
-def invoice_age(invoice_date: str, ref_date: str | None = None, max_days: int = 180) -> dict:
+def invoice_age(
+    invoice_date: str, ref_date: str | None = None, max_days: int = 180
+) -> dict:
     """Return the invoice's age in days plus ``future_dated`` / ``over_max`` flags.
 
     ``ref_date`` defaults to today. On a parse failure returns

@@ -23,7 +23,7 @@ def build_get_page_image(media: MediaService, postgres: Postgres) -> StructuredT
         for you to view."""
         try:
             pid = UUID(part_id)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return {"ok": False, "error": f"{part_id!r} is not a valid part_id (UUID)."}
         row = await postgres.fetch_one(
             "SELECT media_id FROM document_part WHERE id = %s", [pid]
