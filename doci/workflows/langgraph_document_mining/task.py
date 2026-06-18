@@ -12,6 +12,7 @@ from uuid import UUID
 from doci.activities import FinalizeDocument
 from doci.taskiq import broker
 from doci.taskiq.retry import TaskTimeout
+from doci.workflows.langgraph_audit.trigger import enqueue_audit
 from doci.workflows.langgraph_document_mining.graph import (
     build_document_mining_graph,
 )
@@ -83,6 +84,14 @@ async def run_document_mining(
         }
         meta = await final_metadata(runs, eid, thread_id)
         await runs.mark_succeeded(eid, WorkflowResult(output=output), meta)
+        # Auto-chain an audit of this exact mining run when a dossier was given.
+        if dossier_key:
+            await enqueue_audit(
+                runs,
+                document_id=UUID(document_id),
+                mining_execution_id=eid,
+                dossier_key=dossier_key,
+            )
         return output
     except TimeoutError as exc:
         meta = await final_metadata(runs, eid, thread_id)

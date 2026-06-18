@@ -19,11 +19,13 @@ from psycopg2.extras import Json, register_uuid
 
 from doci.helpers import internal
 from doci.postgres import Postgres
-from doci.results.models import ResultKind
+from doci.results.models import PageRef, ResultKind, WorkflowResultRecord
 from doci.telemetry import traced, with_metrics, with_span
 
 # Adapt uuid.UUID <-> PostgreSQL uuid (params + result columns) process-wide.
 register_uuid()
+
+_COLS = "id, execution_id, part_id, kind, content, created_at, updated_at"
 
 
 @traced
@@ -61,6 +63,53 @@ class WorkflowResultService:
             "RETURNING id",
             [execution_id, part_id, str(kind), Json(content)],
         )
+
+    # region read API (the audit/deepagents tools call these)
+    @with_span(kind=SpanKind.CLIENT)
+    @with_metrics()
+    async def list_results(self, execution_id: UUID) -> list[WorkflowResultRecord]:
+        """All stored results for a run (any kind, any part)."""
+        rows = await self._pg.fetch_all(
+            f"SELECT {_COLS} FROM workflow_result WHERE execution_id = %s "
+            "ORDER BY part_id, kind",
+            [execution_id],
+        )
+        return [WorkflowResultRecord.from_row(r) for r in rows]
+
+    @with_span(kind=SpanKind.CLIENT)
+    @with_metrics()
+    async def get(
+        self, execution_id: UUID, part_id: UUID, kind: ResultKind | str
+    ) -> WorkflowResultRecord | None:
+        """One result by ``(execution_id, part_id, kind)``; ``None`` if absent."""
+        row = await self._pg.fetch_one(
+            f"SELECT {_COLS} FROM workflow_result "
+            "WHERE execution_id = %s AND part_id = %s AND kind = %s",
+            [execution_id, part_id, str(ResultKind(kind))],
+        )
+        return WorkflowResultRecord.from_row(row) if row else None
+
+    @with_span(kind=SpanKind.CLIENT)
+    @with_metrics()
+    async def page_index(self, execution_id: UUID) -> list[PageRef]:
+        """The run's annotated pages (page order), each with its classification.
+
+        Joins ``document_part`` for page ordering and pulls ``item_key`` /
+        ``category`` out of each annotation — the compact "table of contents" an
+        audit agent reasons over before pulling any full page.
+        """
+        rows = await self._pg.fetch_all(
+            "SELECT p.id AS part_id, p.page_number, p.locator, "
+            "       r.content->>'item_key' AS item_key, "
+            "       r.content->>'category'  AS category "
+            "FROM workflow_result r JOIN document_part p ON p.id = r.part_id "
+            "WHERE r.execution_id = %s AND r.kind = %s "
+            "ORDER BY p.page_number NULLS LAST, p.locator",
+            [execution_id, str(ResultKind.ANNOTATION)],
+        )
+        return [PageRef.from_row(r) for r in rows]
+
+    # endregion
 
 
 def _annotate(execution_id: UUID, part_id: UUID) -> None:

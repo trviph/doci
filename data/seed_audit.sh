@@ -24,13 +24,13 @@ ALL='["marketing","thiet-bi-logistics","dich-vu-so","phap-ly-thue","co-so-vat-ch
 
 echo "== base documents (bộ chứng từ nền §2) on every dossier =="
 for D in marketing thiet-bi-logistics dich-vu-so phap-ly-thue co-so-vat-chat nhan-su-khac; do
-  doc "$D" pr              "Payment/Purchase Request"            "Đề nghị thanh toán/mua hàng: người lập, ngày lập, số tiền, mục đích"
-  doc "$D" po-epr          "Purchase Order / ePR"                "PO/ePR được duyệt; số tiền và vendor khớp PR và hóa đơn"
-  doc "$D" contract        "Hợp đồng / Agreement"                "Hợp đồng còn hiệu lực nếu giao dịch thuộc diện cần hợp đồng"
+  doc "$D" pr              "Payment/Purchase Request"            "Đề nghị thanh toán/mua hàng: người lập, ngày lập, số tiền, mục đích; chữ ký người lập và người duyệt: tên và chức danh người ký"
+  doc "$D" po-epr          "Purchase Order / ePR"                "PO/ePR được duyệt; số tiền và vendor khớp PR và hóa đơn; người duyệt: tên và chức danh"
+  doc "$D" contract        "Hợp đồng / Agreement"                "Hợp đồng còn hiệu lực nếu giao dịch thuộc diện cần hợp đồng; đại diện ký kết mỗi bên: tên + chức danh + đại diện bên nào; con dấu: tên tổ chức trên dấu của mỗi bên"
   doc "$D" phu-luc         "Phụ lục / Báo giá / Rate card"       "Đơn giá, điều khoản, phạm vi dịch vụ để đối chiếu nghiệm thu"
   doc "$D" invoice         "Hóa đơn"                             "Hóa đơn hợp lệ, có mã CQT nếu là HĐĐT, không quá 180 ngày; MST và số tiền"
-  doc "$D" grn             "Nghiệm thu/Giao hàng (GRN/BBNT/PGH/BBBG)" "Bằng chứng nhận hàng/dịch vụ phù hợp bản chất giao dịch, có chữ ký"
-  doc "$D" payment-voucher "Phiếu chi / Payment voucher"         "Thông tin thanh toán và chữ ký duyệt"
+  doc "$D" grn             "Nghiệm thu/Giao hàng (GRN/BBNT/PGH/BBBG)" "Bằng chứng nhận hàng/dịch vụ phù hợp bản chất giao dịch; chữ ký nghiệm thu: tên + chức danh + đại diện bên A và bên B; con dấu: tên tổ chức trên dấu"
+  doc "$D" payment-voucher "Phiếu chi / Payment voucher"         "Thông tin thanh toán; chữ ký phê duyệt: tên và chức danh người duyệt"
   doc "$D" bank-unc        "Sao kê / Ủy nhiệm chi"               "Bằng chứng đã/chờ thanh toán, khớp số tiền với hóa đơn và PV"
   echo "  base docs -> $D"
 done
@@ -75,7 +75,7 @@ rule du-chung-tu "Đủ chứng từ" "## Kiểm tra đủ chứng từ\n\nMỗi
 rule so-khop-so-tien "So khớp số tiền" "## So khớp số tiền\n\n- PR khớp PO (sai: Medium/High)\n- PO khớp hóa đơn (sai: High)\n- Hóa đơn khớp số tiền thanh toán (sai: High)\n- Sai lệch cho phép tối đa 1 phần trăm hoặc 100.000 VND, lấy ngưỡng nhỏ hơn."
 rule so-khop-vendor "So khớp vendor và tham chiếu" "## So khớp vendor\n\n- Tên NCC trên PR/PO/HĐ/hóa đơn/PV khớp nhau, fuzzy match tối thiểu 85 phần trăm (Medium).\n- MST 10 hoặc 13 số, khớp trên các chứng từ (High).\n- Số hợp đồng và số PO tham chiếu hợp lệ trên hóa đơn (Medium).\n- NCC/MST không nằm trong blacklist: vi phạm là BLOCK."
 rule chuoi-ngay-thang "Chuỗi ngày tháng" "## Chuỗi ngày chuẩn\n\nPR <= PO <= GRN/BBNT/PGH/BBBG <= Hóa đơn <= Thanh toán\n\n- PR không sau PO; PO trước nghiệm thu; nghiệm thu phù hợp hóa đơn; không thanh toán trước khi có hóa đơn trừ tạm ứng được duyệt.\n- Backdating PO/PR trên 30 ngày: High/Critical.\n- Tuổi hóa đơn không quá 180 ngày."
-rule chu-ky-loa-sod "Chữ ký, LOA và phân quyền" "## Chữ ký, phê duyệt, SoD\n\n- Chứng từ kế toán đủ người lập và người duyệt; payment voucher có chữ ký phê duyệt (High).\n- Biên bản đối soát có chữ ký và mộc với dịch vụ cần đối soát (High).\n- LOA: người duyệt đúng cấp theo số tiền, tham chiếu knowledge loa-authority-matrix.\n- SoD: người tạo PR khác người duyệt PO; người duyệt PO khác người duyệt thanh toán."
+rule chu-ky-loa-sod "Chữ ký, LOA và phân quyền" "## Chữ ký, phê duyệt, SoD\n\n- Chứng từ kế toán đủ người lập và người duyệt; payment voucher có chữ ký phê duyệt (High).\n- Mỗi chữ ký phải xác định được người ký: tên, chức danh, và đại diện bên nào. Chữ ký không rõ danh tính (chỉ có nét ký, không có tên/chức danh): High; NEEDS REVIEW nếu không đủ dữ liệu để xác minh.\n- Mỗi con dấu/mộc phải thể hiện tên tổ chức trên dấu, khớp với bên ký tương ứng. Mộc không có thông tin tổ chức hoặc không khớp bên ký: High.\n- Biên bản đối soát có chữ ký và mộc với dịch vụ cần đối soát (High).\n- LOA: người duyệt đúng cấp theo số tiền, tham chiếu knowledge loa-authority-matrix.\n- SoD: người tạo PR khác người duyệt PO; người duyệt PO khác người duyệt thanh toán."
 rule thue-hoa-don "Thuế và hóa đơn" "## Thuế và hóa đơn\n\n- VAT rate hợp lệ: 0, 5, 8, 10 phần trăm.\n- VAT = Subtotal nhân VAT rate, sai lệch tối đa 0,5 phần trăm.\n- Hóa đơn điện tử phải có mã cơ quan thuế nếu thuộc diện.\n- Ngày hóa đơn không ở tương lai, không quá 180 ngày.\n- FCT cho nhà thầu nước ngoài; PIT 10 phần trăm cho cá nhân nhận trên 2 triệu mỗi lần."
 rule rui-ro-gian-lan "Rủi ro và gian lận" "## Rủi ro và gian lận\n\n- Duplicate payment: cùng MST + số hóa đơn + số tiền trong 30 ngày (High).\n- Split payment: hơn 3 hóa đơn cùng vendor trong 7 ngày, mỗi hóa đơn dưới ngưỡng duyệt (High).\n- Thanh toán cuối tuần/ngày lễ không pre-approval (Medium); rush PR đến payment dưới 1 ngày với giao dịch trên 20 triệu (Medium).\n- Vendor đổi tài khoản ngân hàng trong 30 ngày (High); vendor mới dưới 90 ngày và giao dịch trên 50 triệu (High).\n- Round number trên 50 triệu (Low/Medium); vendor concentration trên 30 phần trăm warning, trên 50 phần trăm critical; budget usage trên 80 phần trăm warning, trên 95 phần trăm critical."
 echo "  -- link every rule to all dossiers --"
