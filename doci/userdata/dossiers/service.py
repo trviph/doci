@@ -1,7 +1,7 @@
 """Dossier-definition service over the ``dossier_def`` table.
 
-CRUD with stable slug keys and soft delete (``deleted_at``), mirroring the legacy
-``DocumentGroupService`` minus its embedded items.
+CRUD with stable slug keys and soft delete (``deleted_at``). The documents a
+dossier expects live in ``document_def`` (see :mod:`doci.userdata.documents`).
 """
 
 from collections.abc import Sequence

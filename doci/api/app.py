@@ -42,8 +42,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.media = clients.media
     app.state.documents = clients.documents
     app.state.workflow_runs = clients.workflow_runs
-    app.state.userdata_groups = clients.userdata_groups
-    app.state.userdata_rules = clients.userdata_rules
     app.state.userdata_refdata = clients.userdata_refdata
     app.state.userdata_dossier_defs = clients.userdata_dossier_defs
     app.state.userdata_document_defs = clients.userdata_document_defs

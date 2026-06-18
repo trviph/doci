@@ -1,9 +1,12 @@
-"""FastAPI router for the user data layer.
+"""FastAPI router for the reference-data registry.
 
-One :func:`build_userdata_router` mounts three sub-routers — ``/document-groups``,
-``/audit-rules``, ``/reference-data`` — each resolving its service from
-``app.state`` when not explicitly bound (mirroring the documents router). Domain
-errors map to HTTP codes via :func:`_map_errors`.
+:func:`build_userdata_router` mounts the ``/reference-data`` sub-router, which
+resolves its service from ``app.state.userdata_refdata`` when not explicitly
+bound (mirroring the documents router). Domain errors map to HTTP codes via
+:func:`_map_errors`.
+
+(Dossier / document-def / agent-rule routers live in the per-concern submodules
+``dossiers`` / ``documents`` / ``rules`` and are mounted separately.)
 """
 
 from collections.abc import Iterator
@@ -15,122 +18,15 @@ from uuid import UUID
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 
-from doci.activities.fields import FieldSpec
 from doci.userdata.errors import DuplicateKey, NotFound, SchemaViolation, UnknownField
-from doci.userdata.groups_service import DocumentGroupService
-from doci.userdata.models import (
-    CheckExpr,
-    CheckPrompt,
-    FieldDef,
-    Selector,
-    Severity,
-)
+from doci.userdata.models import FieldDef
 from doci.userdata.refdata_service import ReferenceDataService
-from doci.userdata.rules_service import AuditRuleService
-
-Check = CheckPrompt | CheckExpr
 
 # region request / response models --------------------------------------------
 
 
 class _FromAttrs(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-
-
-class GroupItemModel(_FromAttrs):
-    id: UUID
-    group_id: UUID
-    key: str
-    name: str
-    description: str | None
-    fields: list[FieldSpec]
-    required: bool
-    sort_order: int
-    created_at: datetime
-    updated_at: datetime
-
-
-class GroupModel(_FromAttrs):
-    id: UUID
-    key: str
-    name: str
-    description: str | None
-    deleted_at: datetime | None
-    created_at: datetime
-    updated_at: datetime
-    items: list[GroupItemModel] = Field(default_factory=list)
-
-
-class GroupListPageModel(_FromAttrs):
-    items: list[GroupModel]
-    limit: int
-    offset: int
-    has_more: bool
-
-
-class GroupCreate(BaseModel):
-    name: str
-    key: str | None = Field(default=None, description="Defaults to a slug of name.")
-    description: str | None = None
-
-
-class GroupUpdate(BaseModel):
-    name: str | None = None
-    description: str | None = None
-
-
-class ItemUpsert(BaseModel):
-    name: str
-    key: str | None = Field(default=None, description="Defaults to a slug of name.")
-    description: str | None = None
-    fields: list[FieldSpec] = Field(default_factory=list)
-    required: bool = True
-    sort_order: int = 0
-
-
-class RuleModel(_FromAttrs):
-    id: UUID
-    key: str
-    name: str
-    description: str | None
-    applies_to: list[Selector]
-    reference_keys: list[str]
-    check: Check = Field(discriminator="type")
-    severity: int = Field(description="0=info, 1=warn, 2=block")
-    enabled: bool
-    deleted_at: datetime | None
-    created_at: datetime
-    updated_at: datetime
-
-
-class RuleListPageModel(_FromAttrs):
-    items: list[RuleModel]
-    limit: int
-    offset: int
-    has_more: bool
-
-
-class RuleCreate(BaseModel):
-    name: str
-    check: Check = Field(discriminator="type")
-    key: str | None = Field(default=None, description="Defaults to a slug of name.")
-    description: str | None = None
-    applies_to: list[Selector] = Field(default_factory=list)
-    reference_keys: list[str] = Field(default_factory=list)
-    severity: int = 0
-    enabled: bool = True
-
-
-class RuleUpdate(BaseModel):
-    name: str | None = None
-    description: str | None = None
-    applies_to: list[Selector] | None = None
-    reference_keys: list[str] | None = None
-    # No discriminator on the Optional union — pydantic resolves it by the "type"
-    # literal in smart mode; an explicit discriminator rejects the None branch.
-    check: Check | None = None
-    severity: int | None = None
-    enabled: bool | None = None
 
 
 class DatasetModel(_FromAttrs):
@@ -216,193 +112,13 @@ def _map_errors() -> Iterator[None]:
 
 
 def build_userdata_router(
-    *,
-    groups: DocumentGroupService | None = None,
-    rules: AuditRuleService | None = None,
-    refdata: ReferenceDataService | None = None,
+    *, refdata: ReferenceDataService | None = None
 ) -> APIRouter:
-    """Build the user-data APIRouter (3 sub-routers). Resolves ``app.state.*``."""
+    """Build the user-data APIRouter (the reference-data sub-router)."""
     router = APIRouter(tags=["userdata"])
-    router.include_router(_groups_router(groups))
-    router.include_router(_rules_router(rules))
     router.include_router(_refdata_router(refdata))
     return router
 
-
-# region document-groups ------------------------------------------------------
-
-
-def _groups_router(bound: DocumentGroupService | None) -> APIRouter:
-    r = APIRouter(prefix="/document-groups", tags=["document-groups"])
-
-    def _svc(request: Request) -> DocumentGroupService:
-        return bound if bound is not None else request.app.state.userdata_groups
-
-    @r.post("", status_code=status.HTTP_201_CREATED, summary="Create a document group")
-    async def create(
-        body: GroupCreate, svc: DocumentGroupService = Depends(_svc)
-    ) -> GroupModel:
-        with _map_errors():
-            return GroupModel.model_validate(
-                await svc.create_group(
-                    name=body.name, key=body.key, description=body.description
-                )
-            )
-
-    @r.get("", summary="List document groups (paged)")
-    async def list_groups(
-        limit: int | None = None,
-        offset: int = 0,
-        svc: DocumentGroupService = Depends(_svc),
-    ) -> GroupListPageModel:
-        return GroupListPageModel.model_validate(
-            await svc.list_groups(limit=limit, offset=offset)
-        )
-
-    @r.get("/{key}", summary="Get a group with its items", responses={404: {}})
-    async def get_group(
-        key: str, svc: DocumentGroupService = Depends(_svc)
-    ) -> GroupModel:
-        with _map_errors():
-            return GroupModel.model_validate(await svc.get_group(key))
-
-    @r.patch("/{key}", summary="Update a group", responses={404: {}})
-    async def update_group(
-        key: str, body: GroupUpdate, svc: DocumentGroupService = Depends(_svc)
-    ) -> GroupModel:
-        with _map_errors():
-            return GroupModel.model_validate(
-                await svc.update_group(
-                    key, name=body.name, description=body.description
-                )
-            )
-
-    @r.delete("/{key}", summary="Soft-delete a group")
-    async def delete_group(
-        key: str, svc: DocumentGroupService = Depends(_svc)
-    ) -> DeleteResult:
-        return DeleteResult(deleted=await svc.delete_groups([key]))
-
-    @r.get("/{key}/items", summary="List a group's items", responses={404: {}})
-    async def list_items(
-        key: str, svc: DocumentGroupService = Depends(_svc)
-    ) -> list[GroupItemModel]:
-        with _map_errors():
-            return [GroupItemModel.model_validate(i) for i in await svc.list_items(key)]
-
-    @r.put("/{key}/items", summary="Create or update an item", responses={404: {}})
-    async def upsert_item(
-        key: str, body: ItemUpsert, svc: DocumentGroupService = Depends(_svc)
-    ) -> GroupItemModel:
-        with _map_errors():
-            return GroupItemModel.model_validate(
-                await svc.upsert_item(
-                    key,
-                    name=body.name,
-                    key=body.key,
-                    description=body.description,
-                    fields=body.fields,
-                    required=body.required,
-                    sort_order=body.sort_order,
-                )
-            )
-
-    @r.delete("/{key}/items/{item_key}", summary="Delete an item", responses={404: {}})
-    async def delete_item(
-        key: str, item_key: str, svc: DocumentGroupService = Depends(_svc)
-    ) -> DeleteResult:
-        with _map_errors():
-            return DeleteResult(deleted=await svc.delete_item(key, item_key))
-
-    return r
-
-
-# endregion
-
-# region audit-rules ----------------------------------------------------------
-
-
-def _rules_router(bound: AuditRuleService | None) -> APIRouter:
-    r = APIRouter(prefix="/audit-rules", tags=["audit-rules"])
-
-    def _svc(request: Request) -> AuditRuleService:
-        return bound if bound is not None else request.app.state.userdata_rules
-
-    @r.post("", status_code=status.HTTP_201_CREATED, summary="Create an audit rule")
-    async def create(
-        body: RuleCreate, svc: AuditRuleService = Depends(_svc)
-    ) -> RuleModel:
-        with _map_errors():
-            return RuleModel.model_validate(
-                await svc.create_rule(
-                    name=body.name,
-                    check=body.check,
-                    key=body.key,
-                    description=body.description,
-                    applies_to=body.applies_to,
-                    reference_keys=body.reference_keys,
-                    severity=Severity(body.severity),
-                    enabled=body.enabled,
-                )
-            )
-
-    @r.get("", summary="List audit rules (paged)")
-    async def list_rules(
-        limit: int | None = None,
-        offset: int = 0,
-        svc: AuditRuleService = Depends(_svc),
-    ) -> RuleListPageModel:
-        return RuleListPageModel.model_validate(
-            await svc.list_rules(limit=limit, offset=offset)
-        )
-
-    @r.get(
-        "/applicable",
-        summary="Rules applicable to a group and/or document (+ globals)",
-    )
-    async def applicable(
-        group: str | None = None,
-        document: str | None = None,
-        svc: AuditRuleService = Depends(_svc),
-    ) -> list[RuleModel]:
-        rules = await svc.applicable_to(group=group, document=document)
-        return [RuleModel.model_validate(rule) for rule in rules]
-
-    @r.get("/{key}", summary="Get an audit rule", responses={404: {}})
-    async def get_rule(key: str, svc: AuditRuleService = Depends(_svc)) -> RuleModel:
-        with _map_errors():
-            return RuleModel.model_validate(await svc.get_rule(key))
-
-    @r.patch("/{key}", summary="Update an audit rule", responses={404: {}})
-    async def update_rule(
-        key: str, body: RuleUpdate, svc: AuditRuleService = Depends(_svc)
-    ) -> RuleModel:
-        with _map_errors():
-            return RuleModel.model_validate(
-                await svc.update_rule(
-                    key,
-                    name=body.name,
-                    description=body.description,
-                    applies_to=body.applies_to,
-                    reference_keys=body.reference_keys,
-                    check=body.check,
-                    severity=Severity(body.severity)
-                    if body.severity is not None
-                    else None,
-                    enabled=body.enabled,
-                )
-            )
-
-    @r.delete("/{key}", summary="Soft-delete an audit rule")
-    async def delete_rule(
-        key: str, svc: AuditRuleService = Depends(_svc)
-    ) -> DeleteResult:
-        return DeleteResult(deleted=await svc.delete_rules([key]))
-
-    return r
-
-
-# endregion
 
 # region reference-data -------------------------------------------------------
 

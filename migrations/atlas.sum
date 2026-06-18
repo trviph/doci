@@ -1,4 +1,4 @@
-h1:GzMKcLHQM/7jRPzmHvnHKdS30DLvpoYc/b17KGuRDAE=
+h1:2vxgQUTKuert/xBLdPSfleJAaz8x1OhoHY892imNFe4=
 20260601000000_create_media.sql h1:Id+sDXdLzlPo8YF92rMWQY+V3NsC1Yv01ASE3wqJ5Hw=
 20260608000000_create_workflow_execution.sql h1:2vDrDgfMHkZtORakfzifvV0IwRtyM2nXh1cK1jTYyFo=
 20260609000000_create_workflow_result.sql h1:rKa5UXc/F2vGv/KIzOAztAG6BgHvSM9OBMlD5g/Nx5o=
@@ -8,3 +8,4 @@ h1:GzMKcLHQM/7jRPzmHvnHKdS30DLvpoYc/b17KGuRDAE=
 20260610000003_result_on_part.sql h1:jJKcJ6CP5QaL/H7wW6XNNQpP6deRhnu/mFCjLvoLU1g=
 20260611081200_create_userdata.sql h1:P4nN582GZ+GNgu3kEwwaZYfGN/UalyUKPSzYU1uL0mQ=
 20260618064408_create_userdata_v2.sql h1:Q6obsTu1KhIAN3j3bKGhbuzzPnAzh2s87ytcyBCs7pg=
+20260618075635_drop_legacy_userdata.sql h1:u5ldZ3Tf4Rm0GEuSGtyxqGxidf4Xs28yl/LXUMqQgOU=
