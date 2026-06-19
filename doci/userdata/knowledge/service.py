@@ -1,8 +1,9 @@
 """Knowledge service: natural-language reference entries over ``knowledge``.
 
 CRUD with stable slug keys and soft delete (``deleted_at``). :meth:`list_knowledge`
-takes an optional ``search`` — a substring ``ILIKE`` over name/description/body —
-the surface a future agent/MCP tool reads the org's reference material through.
+takes an optional ``search`` — ranked by trigram similarity (pg_trgm
+``word_similarity``) over name/description/body, best match first — the surface a
+future agent/MCP tool reads the org's reference material through.
 """
 
 from collections.abc import Sequence
@@ -22,10 +23,11 @@ register_uuid()
 _COLS = "id, key, name, description, body, deleted_at, created_at, updated_at"
 
 
-def _like_term(search: str) -> str:
-    """Escape LIKE metacharacters so a search term matches literally."""
-    escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-    return f"%{escaped}%"
+# Minimum pg_trgm word_similarity for a knowledge entry to be considered a search
+# hit. ~0.3 keeps genuine fuzzy matches (e.g. "LOA matrix" → "LOA / Authority
+# matrix" scores ~0.64; cross-vocabulary phrasings still clear this floor) while
+# dropping unrelated entries. Results are ordered by similarity, best first.
+_SEARCH_SIM_THRESHOLD = 0.3
 
 
 @traced
@@ -40,22 +42,30 @@ class KnowledgeService:
     async def list_knowledge(
         self, *, search: str | None = None, limit: int | None = None, offset: int = 0
     ) -> ListPage:
-        """List entries (newest first), paginated. ``search`` is an optional
-        substring match over name/description/body."""
+        """List entries, paginated. With ``search`` set, entries are ranked by
+        trigram similarity (pg_trgm ``word_similarity``) of the query to
+        name/description/body, best match first, keeping only those above
+        ``_SEARCH_SIM_THRESHOLD`` — a fuzzy match, so 'LOA matrix' surfaces
+        'LOA / Authority matrix' and a stray word the entry lacks doesn't zero the
+        result. Without ``search``, entries come newest-first."""
         lim, off = _page_bounds(limit, offset)
         where = ["deleted_at IS NULL"]
         params: list = []
+        order = "created_at DESC, id"
         if search:
-            where.append(
-                "(name ILIKE %s ESCAPE '\\' OR description ILIKE %s ESCAPE '\\' "
-                "OR body ILIKE %s ESCAPE '\\')"
+            haystack = (
+                "(coalesce(name, '') || ' ' || coalesce(description, '') || ' ' "
+                "|| coalesce(body, ''))"
             )
-            term = _like_term(search)
-            params.extend([term, term, term])
+            sim = f"word_similarity(%s, {haystack})"
+            where.append(f"{sim} >= %s")
+            params.extend([search, _SEARCH_SIM_THRESHOLD])
+            order = f"{sim} DESC, created_at DESC, id"
+            params.append(search)  # ORDER BY recomputes similarity
         params.extend([lim + 1, off])
         rows = await self._pg.fetch_all(
             f"SELECT {_COLS} FROM knowledge WHERE {' AND '.join(where)} "
-            "ORDER BY created_at DESC, id LIMIT %s OFFSET %s",
+            f"ORDER BY {order} LIMIT %s OFFSET %s",
             params,
         )
         has_more = len(rows) > lim

@@ -1,8 +1,10 @@
 """Tool: search the org knowledge base (reference material).
 
-Service-backed (factory). Full-text substring search over name/description/body;
-returns matches WITHOUT the full body (call ``get_knowledge`` for that) so the
-agent can pick what it needs — LOA matrix, thresholds, VAT/PIT rules, vendor lists.
+Service-backed (factory). Fuzzy search over name/description/body, ranked by
+trigram similarity (best match first) so a multi-word or differently-phrased query
+still surfaces the right entry; returns matches WITHOUT the full body (call
+``get_knowledge`` for that) so the agent can pick what it needs — LOA matrix,
+thresholds, VAT/PIT rules, vendor lists.
 """
 
 from langchain_core.tools import StructuredTool, tool

@@ -1,4 +1,4 @@
-h1:GhA1vfxuUwKHyzHm6sfT+BbmBmNM4sLPjsumDVQ0jpY=
+h1:rQ/UQYPBHAKqjaV6QEx0a4gjlXndoX1oTN0kpDHqCKI=
 20260601000000_create_media.sql h1:Id+sDXdLzlPo8YF92rMWQY+V3NsC1Yv01ASE3wqJ5Hw=
 20260608000000_create_workflow_execution.sql h1:2vDrDgfMHkZtORakfzifvV0IwRtyM2nXh1cK1jTYyFo=
 20260609000000_create_workflow_result.sql h1:rKa5UXc/F2vGv/KIzOAztAG6BgHvSM9OBMlD5g/Nx5o=
@@ -11,3 +11,4 @@ h1:GhA1vfxuUwKHyzHm6sfT+BbmBmNM4sLPjsumDVQ0jpY=
 20260618075635_drop_legacy_userdata.sql h1:u5ldZ3Tf4Rm0GEuSGtyxqGxidf4Xs28yl/LXUMqQgOU=
 20260618084628_knowledge.sql h1:xhar1bX2tjqqKy7Xf7INovW6y5MhoD5e/GEVU0kev4o=
 20260618100314_audit_findings.sql h1:bkr2EiHOsaopvgyNbZshawxwpwp+7g6wcCsezdhXv9k=
+20260619040000_enable_pg_trgm.sql h1:BrdYLUpLkspYm2CoEJuScuM0iOZWvzo/I4IbhFOnwvQ=
