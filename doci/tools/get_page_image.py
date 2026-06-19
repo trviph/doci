@@ -1,10 +1,10 @@
 """Tool: show a page's image to the model (fallback visual check).
 
-Service-backed (factory). Most visual evidence (signatures, stamps, IMEI) is
-captured as facts at annotation time; this is the fallback for when the agent
-must actually look. Returns the page image as a content block the (multimodal)
-model can view — used only when the extracted text/annotation can't verify
-something. Never raises.
+Service-backed (factory). Most evidence (signatures, stamps, IMEI) is captured as
+facts at annotation time or in the page's transcribed text (e.g. `<signature>`
+tokens); this is the fallback for when the agent must actually look. Returns the
+page image as a content block the (multimodal) model can view — used only when the
+facts and the extracted text can't verify something. Never raises.
 """
 
 import base64

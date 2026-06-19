@@ -1,7 +1,9 @@
 """Tool: the extracted text (OCR/markdown) of one page.
 
-Service-backed (factory). Bound to the mining ``execution_id``; the fallback for
-when a page's structured facts are insufficient and the agent needs the raw text.
+Service-backed (factory). Bound to the mining ``execution_id``; a primary source
+alongside the structured facts — the page's full transcription (including
+``<signature>`` tokens) for when the agent needs exact wording or detail the
+distilled facts don't capture.
 """
 
 from uuid import UUID
@@ -15,8 +17,9 @@ def build_get_page_text(
     results: WorkflowResultService, execution_id: UUID
 ) -> StructuredTool:
     async def get_page_text(part_id: str) -> dict:
-        """Get one page's extracted text (markdown) by part_id, when the facts are
-        not enough to decide."""
+        """Get one page's full transcribed text (markdown, including `<signature>`
+        tokens) by part_id — read it when you need exact wording or detail the
+        distilled facts don't capture."""
         try:
             pid = UUID(part_id)
         except ValueError, TypeError:
