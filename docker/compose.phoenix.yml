@@ -8,6 +8,10 @@ services:
       - "4317:4317"   # OTLP/gRPC collector (matches the default exporter endpoint)
     environment:
       PHOENIX_WORKING_DIR: /mnt/data
+      # Local-friendly retention: auto-purge traces older than 3 days so the
+      # volume doesn't grow unbounded. The cleanup sweep runs on a schedule
+      # (weekly by default), so data may linger a little past 3 days.
+      PHOENIX_DEFAULT_RETENTION_POLICY_DAYS: 3
     volumes:
       - phoenix_data:/mnt/data
     healthcheck:
