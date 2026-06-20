@@ -30,6 +30,7 @@ from doci.workflows.langgraph_document_mining_pdf.state import (
     DocumentMiningPdfState,
     PageRef,
 )
+from doci.workflows.tracing import child_config
 
 ProcessNode = Callable[[DocumentMiningPdfState, RunnableConfig], Awaitable[dict]]
 
@@ -86,6 +87,7 @@ def make_process_node(
         document_id: UUID,
         execution_id: UUID,
         dossier_spec: dict | None,
+        config: RunnableConfig,
     ) -> dict:
         res = await image_graph.ainvoke(
             {
@@ -95,7 +97,15 @@ def make_process_node(
                 "execution_id": execution_id,
                 "dossier_spec": dossier_spec,
             },
-            config={"configurable": {"thread_id": f"{thread_id}:p{page.page_number}"}},
+            config=child_config(
+                config,
+                thread_id=f"{thread_id}:p{page.page_number}",
+                run_name=f"mine:page:{page.page_number}",
+                metadata={
+                    "page_number": page.page_number,
+                    "part_id": str(page.part_id),
+                },
+            ),
         )
         thumb_id = res.get("thumb_media_id")
         if thumb_id is not None:
@@ -124,7 +134,7 @@ def make_process_node(
                 if page.kind == "text":
                     return await _text_page(page, execution_id, dossier)
                 return await _image_page(
-                    page, thread_id, document_id, execution_id, dossier_spec
+                    page, thread_id, document_id, execution_id, dossier_spec, config
                 )
 
         results = await asyncio.gather(*(handle(p) for p in state["pages"]))

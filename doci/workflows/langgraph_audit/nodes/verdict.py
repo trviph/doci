@@ -14,6 +14,7 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 
 from doci.agents import build_verdict_agent
 from doci.workflows.langgraph_audit.state import AuditState
+from doci.workflows.tracing import child_config
 
 if TYPE_CHECKING:
     from doci.bootstrap import Clients
@@ -42,10 +43,19 @@ def make_verdict_node(clients: "Clients", checkpointer: BaseCheckpointSaver | No
         await asyncio.wait_for(
             agent.ainvoke(
                 {"messages": [HumanMessage(_KICKOFF)]},
-                config={
-                    "configurable": {"thread_id": f"{thread_id}:verdict"},
-                    "recursion_limit": VERDICT_RECURSION_LIMIT,
-                },
+                config=child_config(
+                    config,
+                    thread_id=f"{thread_id}:verdict",
+                    run_name="audit:verdict",
+                    recursion_limit=VERDICT_RECURSION_LIMIT,
+                    tags=["audit", "phase:verdict"],
+                    metadata={
+                        "audit_execution_id": str(state["audit_execution_id"]),
+                        "dossier_key": state["dossier_key"],
+                        "parent_agent": "audit",
+                        "depth": 1,
+                    },
+                ),
             ),
             timeout=VERDICT_TIMEOUT_S,
         )

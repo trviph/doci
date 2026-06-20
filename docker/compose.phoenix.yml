@@ -1,0 +1,26 @@
+services:
+  phoenix:
+    image: arizephoenix/phoenix:latest
+    # OpenInference-native trace UI. The OTLP exporter (default endpoint
+    # localhost:4317) sends here with no app change; view traces at :6006.
+    ports:
+      - "6006:6006"   # UI + OTLP/HTTP collector
+      - "4317:4317"   # OTLP/gRPC collector (matches the default exporter endpoint)
+    environment:
+      PHOENIX_WORKING_DIR: /mnt/data
+    volumes:
+      - phoenix_data:/mnt/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:6006/healthz')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - doci
+
+volumes:
+  phoenix_data:
+
+networks:
+  doci:
+    name: doci

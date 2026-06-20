@@ -9,6 +9,8 @@ there, builds the graph, and runs it for a single media.
 import asyncio
 from uuid import UUID
 
+from opentelemetry import trace
+
 from doci.activities import FinalizeDocument
 from doci.taskiq import broker
 from doci.taskiq.retry import TaskTimeout
@@ -21,6 +23,7 @@ from doci.workflows.langgraph_document_mining_image.deps import build_image_grap
 from doci.workflows.langgraph_document_mining_pdf.deps import build_pdf_graph
 from doci.workflows.models import WorkflowResult
 from doci.workflows.runtime import final_metadata, get_clients, get_saver
+from doci.workflows.tracing import child_config
 
 # Per-task config: a 15-minute time budget; retry every failure except a timeout.
 TIMEOUT_S = 15 * 60
@@ -43,7 +46,29 @@ async def run_document_mining(
     runs = clients.workflow_runs
     eid = UUID(execution_id)
     await runs.mark_running(eid)
-    config = {"configurable": {"thread_id": thread_id}}
+    # job_id ties this mining run and its auto-chained audit together; document_id
+    # is stable across both. Stamp it on the task span and into the graph's root
+    # metadata so every child span (across both graphs) is correlatable.
+    job_id = document_id
+    span = trace.get_current_span()
+    span.set_attribute("workflow.kind", "mining")
+    span.set_attribute("job_id", job_id)
+    span.set_attribute("document_id", document_id)
+    span.set_attribute("execution_id", execution_id)
+    if dossier_key:
+        span.set_attribute("dossier_key", dossier_key)
+    config = child_config(
+        None,
+        thread_id=thread_id,
+        run_name="mining",
+        tags=["workflow:mining"],
+        metadata={
+            "job_id": job_id,
+            "document_id": document_id,
+            "execution_id": execution_id,
+            "dossier_key": dossier_key,
+        },
+    )
     try:
         # Child graphs are embedded as structural subgraph nodes — compiled
         # without their own checkpointer so the parent's checkpointer (below)
