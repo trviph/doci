@@ -50,21 +50,24 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Open PR with fixes
+      - name: Push fixes to a single branch
         if: steps.changes.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          BRANCH="chore/ruff-fixes-${{ github.event.workflow_run.id }}"
-          git checkout -b "$BRANCH"
+          BRANCH="chore/ruff-fixes"
+          BASE="${{ github.event.workflow_run.head_branch }}"
+          git checkout -B "$BRANCH"
           git add -A
           git commit -m "chore: apply ruff fixes"
-          git push origin "$BRANCH"
-          gh pr create \
-            --title "chore: apply ruff fixes" \
-            --body "Automated ruff fixes from [Lint run #${{ github.event.workflow_run.id }}](${{ github.event.workflow_run.html_url }})." \
-            --base main \
-            --head "$BRANCH"
+          git push --force origin "$BRANCH"
+          if [[ -z "$(gh pr list --head "$BRANCH" --base "$BASE" --state open --json number --jq '.[].number')" ]]; then
+            gh pr create \
+              --title "chore: apply ruff fixes" \
+              --body "Automated ruff fixes. This branch is force-updated on each failing Lint run on \`$BASE\`." \
+              --base "$BASE" \
+              --head "$BRANCH"
+          fi
 
       - name: Nothing to fix
         if: steps.changes.outputs.changed == 'false'
