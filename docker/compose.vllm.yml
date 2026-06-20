@@ -1,0 +1,69 @@
+services:
+  # One-shot: pre-download the model into the shared HF cache so the server
+  # below starts from a warm cache (no download on every `up`). Exits 0 when
+  # done; needs no GPU. Reuses the vllm image because it already ships `hf`.
+  vllm-init:
+    image: vllm/vllm-openai:latest
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["hf download Qwen/Qwen3.5-4B"]
+    environment:
+      HF_HOME: /root/.cache/huggingface
+      # HUGGING_FACE_HUB_TOKEN: ${HUGGING_FACE_HUB_TOKEN:-}  # only if gated
+    volumes:
+      - vllm_cache:/root/.cache/huggingface
+    networks:
+      - doci
+
+  # OpenAI-compatible server. Flags tuned for a 6 GB Turing card (RTX 2060):
+  #   bitsandbytes int4  — no official 4-bit quant exists; quantize at load
+  #   --dtype half       — Turing has no bf16
+  #   --enforce-eager    — skip CUDA-graph capture to save VRAM
+  #   small max-model-len / max-num-seqs / mm limits — keep KV + vision in budget
+  # Reaches the app's LLM layer via DOCI_LLM_BASE_URL=http://localhost:8100/v1.
+  vllm:
+    image: vllm/vllm-openai:latest
+    depends_on:
+      vllm-init:
+        condition: service_completed_successfully
+    command:
+      - --model=Qwen/Qwen3.5-4B
+      - --served-model-name=qwen3.5-4b
+      - --quantization=bitsandbytes
+      - --load-format=bitsandbytes
+      - --dtype=half
+      - --enforce-eager
+      - --max-model-len=4096
+      - --max-num-seqs=1
+      - --gpu-memory-utilization=0.92
+      - --limit-mm-per-prompt=image=1
+      - '--mm-processor-kwargs={"max_pixels": 1003520}'
+    environment:
+      HF_HOME: /root/.cache/huggingface
+      # HUGGING_FACE_HUB_TOKEN: ${HUGGING_FACE_HUB_TOKEN:-}  # only if gated
+    ports:
+      - "8100:8000"   # host 8000 = app API, 8001 = worker monitor; vLLM → 8100
+    volumes:
+      - vllm_cache:/root/.cache/huggingface
+    ipc: host          # vLLM needs a large /dev/shm
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 600s   # model load + int4 quant is slow on a small card
+    networks:
+      - doci
+
+volumes:
+  vllm_cache:
+
+networks:
+  doci:
+    name: doci
