@@ -5,6 +5,13 @@ name: Tag latest
 # Trigger: a real GitHub Release is published (not just a tag push).
 # Pre-release Releases are skipped, so v1.2.3-rc1 does not move :latest.
 #
+# The versioned images we alias are built by release.yml, triggered by the
+# tag push that accompanies the Release — so both events fire at once and
+# this workflow can outrace the image build. The `wait-for-release` job
+# blocks until the Release workflow run for this commit finishes
+# successfully; only then does `promote` alias the manifests. If that build
+# failed, the wait job fails and :latest is left untouched.
+#
 # Uses `docker buildx imagetools create` to alias existing manifests rather
 # than rebuilding — fast, and preserves the variants release.yml pushed.
 
@@ -20,15 +27,48 @@ on:
 permissions:
   contents: read
   packages: write
+  actions: read # gh run list/watch in wait-for-release
 
 concurrency:
   group: tag-latest
   cancel-in-progress: false
 
 jobs:
-  promote:
+  wait-for-release:
     # Skip pre-releases (v1.2.3-rc1, ...). For manual dispatch the user
     # has chosen the tag explicitly, so we trust them.
+    if: github.event_name == 'workflow_dispatch' || github.event.release.prerelease == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for the Release workflow to finish building images
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # release.yml runs on the tag push that accompanies this Release,
+          # on the same commit. Find that run and wait for it to succeed
+          # before we alias its versioned images to :latest.
+          RUN_ID=""
+          for i in $(seq 1 30); do
+            RUN_ID=$(gh run list --workflow release.yml --limit 50 \
+              --json databaseId,headSha \
+              --jq "[.[] | select(.headSha==\"$SHA\")][0].databaseId // empty")
+            [ -n "$RUN_ID" ] && break
+            echo "Release run for $SHA not registered yet (attempt $i)…"
+            sleep 10
+          done
+          if [ -z "$RUN_ID" ]; then
+            echo "::error::No Release workflow run found for $SHA"
+            exit 1
+          fi
+          echo "Watching Release run $RUN_ID…"
+          gh run watch "$RUN_ID" --exit-status
+
+  promote:
+    needs: wait-for-release
     if: github.event_name == 'workflow_dispatch' || github.event.release.prerelease == false
     runs-on: ubuntu-latest
     strategy:
