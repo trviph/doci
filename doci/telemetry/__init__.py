@@ -15,17 +15,24 @@ from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
+from openinference.semconv.resource import ResourceAttributes
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 from doci.globals import ENVIRONMENT, RUNTIME_ID, SERVICE_VERSION
 
+_SERVICE_NAME = os.getenv("OTEL_SERVICE_NAME", "doci")
 _CUSTOM_RESOURCE = Resource.create(
     {
+        "service.name": _SERVICE_NAME,
         "deployment.environment": ENVIRONMENT,
         "service.version": SERVICE_VERSION,
         "runtime.id": RUNTIME_ID,
+        # Phoenix groups traces into projects by this OpenInference resource
+        # attribute; default it to the OTel service name so traces land in a
+        # named project (defaults to "doci") instead of "default".
+        ResourceAttributes.PROJECT_NAME: _SERVICE_NAME,
     }
 )
 
