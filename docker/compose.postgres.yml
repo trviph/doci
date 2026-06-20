@@ -17,6 +17,27 @@ services:
     networks:
       - doci
 
+  # One-shot: apply Atlas migrations once Postgres is healthy (mirrors the
+  # `atlas migrate apply` run by .github/workflows/migration-local.yml).
+  # Idempotent — already-applied migrations are skipped. Exits when done.
+  postgres-init:
+    image: arigaio/atlas:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command:
+      - migrate
+      - apply
+      - --dir
+      - file://migrations
+      - --url
+      - postgres://doci:doci@postgres:5432/doci?sslmode=disable
+    working_dir: /work
+    volumes:
+      - ../migrations:/work/migrations:ro
+    networks:
+      - doci
+
 volumes:
   postgres_data:
 
