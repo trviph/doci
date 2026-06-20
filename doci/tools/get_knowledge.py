@@ -12,7 +12,9 @@ from doci.userdata.knowledge import KnowledgeService
 
 def build_get_knowledge(knowledge: KnowledgeService) -> StructuredTool:
     async def get_knowledge(key: str) -> dict:
-        """Get one knowledge entry's full markdown body by key (from search_knowledge)."""
+        """Get one knowledge entry's full markdown body by key (from search_knowledge).
+        Next: use this body's content (thresholds, matrix, policy) to evaluate the
+        rule and cite it in the finding's evidence."""
         try:
             k = await knowledge.get_knowledge(key)
         except NotFound:
@@ -23,6 +25,10 @@ def build_get_knowledge(knowledge: KnowledgeService) -> StructuredTool:
             "name": k.name,
             "description": k.description,
             "body": k.body,
+            "next": (
+                "Use this body's content (thresholds, matrix, policy) to evaluate "
+                "the rule and cite it in the finding's evidence."
+            ),
         }
 
     return tool(get_knowledge)
