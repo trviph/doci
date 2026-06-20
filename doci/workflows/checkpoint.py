@@ -253,7 +253,9 @@ class ValkeySaver(BaseCheckpointSaver[str]):
         before_id = get_checkpoint_id(before) if before else None
         only_id = get_checkpoint_id(config)
         with _suppress_tracing():
-            members = await cast(Awaitable[set], self._r.smembers(self._idx(thread, ns)))
+            members = await cast(
+                Awaitable[set], self._r.smembers(self._idx(thread, ns))
+            )
         ids = sorted((_s(i) for i in members), reverse=True)
         for cid in ids:
             if only_id and cid != only_id:
