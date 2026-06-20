@@ -12,14 +12,18 @@ works against the public contract. Async-only — the synchronous methods raise,
 the graphs are always driven via ``ainvoke``.
 """
 
+import functools
 import os
-from collections.abc import AsyncIterator, Awaitable, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, cast
 
 import ormsgpack
 import redis.asyncio as aioredis
 from langchain_core.runnables import RunnableConfig
+from opentelemetry import context as _otel_ctx
+from opentelemetry.instrumentation.utils import _SUPPRESS_INSTRUMENTATION_KEY
 from langgraph.checkpoint.base import (
     WRITES_IDX_MAP,
     BaseCheckpointSaver,
@@ -35,6 +39,33 @@ from langgraph.checkpoint.base import (
 _DEFAULT_URL = "redis://localhost:6379/2"
 _DEFAULT_TTL = 3 * 24 * 60 * 60  # 3 days, in seconds
 _DEFAULT_PREFIX = "doci:ckpt:"
+
+
+@contextmanager
+def _suppress_tracing():
+    """Suppress OTel auto-instrumentation for the duration of the block.
+
+    The checkpointer fires many low-level Valkey commands (HSET/HKEYS/SADD/
+    EXPIRE) on every node step; left traced they flood the trace UI and bury the
+    agent spans. Suppressing here drops only the *checkpointer's* redis spans —
+    the KV cache and taskiq broker (separate clients) keep tracing.
+    """
+    token = _otel_ctx.attach(_otel_ctx.set_value(_SUPPRESS_INSTRUMENTATION_KEY, True))
+    try:
+        yield
+    finally:
+        _otel_ctx.detach(token)
+
+
+def _untraced(fn: Callable) -> Callable:
+    """Run an async checkpointer method with redis tracing suppressed."""
+
+    @functools.wraps(fn)
+    async def wrapper(*args: Any, **kwargs: Any) -> Any:
+        with _suppress_tracing():
+            return await fn(*args, **kwargs)
+
+    return wrapper
 
 
 def _s(value: Any) -> str:
@@ -96,6 +127,7 @@ class ValkeySaver(BaseCheckpointSaver[str]):
 
     # endregion
 
+    @_untraced
     async def aput(
         self,
         config: RunnableConfig,
@@ -134,6 +166,7 @@ class ValkeySaver(BaseCheckpointSaver[str]):
             }
         }
 
+    @_untraced
     async def aput_writes(
         self,
         config: RunnableConfig,
@@ -163,6 +196,7 @@ class ValkeySaver(BaseCheckpointSaver[str]):
             pipe.expire(w_key, self._ttl)
             await pipe.execute()
 
+    @_untraced
     async def aget_tuple(self, config: RunnableConfig) -> CheckpointTuple | None:
         thread = config["configurable"]["thread_id"]
         ns = config["configurable"].get("checkpoint_ns", "")
@@ -218,7 +252,8 @@ class ValkeySaver(BaseCheckpointSaver[str]):
         ns = config["configurable"].get("checkpoint_ns", "")
         before_id = get_checkpoint_id(before) if before else None
         only_id = get_checkpoint_id(config)
-        members = await cast(Awaitable[set], self._r.smembers(self._idx(thread, ns)))
+        with _suppress_tracing():
+            members = await cast(Awaitable[set], self._r.smembers(self._idx(thread, ns)))
         ids = sorted((_s(i) for i in members), reverse=True)
         for cid in ids:
             if only_id and cid != only_id:
@@ -244,6 +279,7 @@ class ValkeySaver(BaseCheckpointSaver[str]):
                 limit -= 1
             yield tup
 
+    @_untraced
     async def adelete_thread(self, thread_id: str) -> None:
         pattern = f"{self._p}*:{thread_id}:*"
         keys = [k async for k in self._r.scan_iter(match=pattern)]

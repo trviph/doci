@@ -10,11 +10,14 @@ just a summary.
 import asyncio
 from uuid import UUID
 
+from opentelemetry import trace
+
 from doci.taskiq import broker
 from doci.taskiq.retry import TaskTimeout
 from doci.workflows.langgraph_audit.graph import build_audit_graph
 from doci.workflows.models import WorkflowResult
 from doci.workflows.runtime import final_metadata, get_clients, get_saver
+from doci.workflows.tracing import child_config
 
 # Overall budget covering both phases; each node also enforces its own per-phase
 # timeout (see the find / verdict nodes).
@@ -35,6 +38,16 @@ async def run_audit(
     runs = clients.workflow_runs
     eid = UUID(audit_execution_id)
     await runs.mark_running(eid)
+    # Same job_id as the mining run that chained here (document_id), so both
+    # graphs' spans are correlatable; the trace itself links via taskiq context.
+    job_id = document_id
+    span = trace.get_current_span()
+    span.set_attribute("workflow.kind", "audit")
+    span.set_attribute("job_id", job_id)
+    span.set_attribute("document_id", document_id)
+    span.set_attribute("execution_id", audit_execution_id)
+    span.set_attribute("mining_execution_id", mining_execution_id)
+    span.set_attribute("dossier_key", dossier_key)
     try:
         graph = build_audit_graph(clients, checkpointer=get_saver())
         await asyncio.wait_for(
@@ -45,7 +58,19 @@ async def run_audit(
                     "audit_execution_id": eid,
                     "dossier_key": dossier_key,
                 },
-                config={"configurable": {"thread_id": thread_id}},
+                config=child_config(
+                    None,
+                    thread_id=thread_id,
+                    run_name="audit",
+                    tags=["workflow:audit"],
+                    metadata={
+                        "job_id": job_id,
+                        "document_id": document_id,
+                        "audit_execution_id": audit_execution_id,
+                        "mining_execution_id": mining_execution_id,
+                        "dossier_key": dossier_key,
+                    },
+                ),
             ),
             timeout=TIMEOUT_S,
         )
