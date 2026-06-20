@@ -4,6 +4,7 @@ services:
   # done; needs no GPU. Reuses the vllm image because it already ships `hf`.
   vllm-init:
     image: vllm/vllm-openai:latest
+    profiles: ["gpu"]   # opt-in: only starts with `--profile gpu` (skipped on GPU-less hosts)
     entrypoint: ["/bin/sh", "-c"]
     command: ["hf download Qwen/Qwen3.5-4B"]
     environment:
@@ -22,6 +23,7 @@ services:
   # Reaches the app's LLM layer via DOCI_LLM_BASE_URL=http://localhost:8100/v1.
   vllm:
     image: vllm/vllm-openai:latest
+    profiles: ["gpu"]   # opt-in: only starts with `--profile gpu` (skipped on GPU-less hosts)
     depends_on:
       vllm-init:
         condition: service_completed_successfully
