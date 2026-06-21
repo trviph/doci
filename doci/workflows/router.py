@@ -6,10 +6,11 @@ job and returns its id; the broker has no result backend, so this is
 submit-only (no status/result retrieval here).
 """
 
+from datetime import datetime
 from enum import Enum
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
 from doci.documents import DocumentNotFound, DocumentService
@@ -23,8 +24,12 @@ from doci.workflows.models import (
     TaskiqMeta,
     WorkflowInput,
     WorkflowMetadata,
+    WorkflowStatus,
 )
-from doci.workflows.service import WorkflowExecutionService
+from doci.workflows.service import (
+    WorkflowExecutionNotFound,
+    WorkflowExecutionService,
+)
 
 
 class WorkflowKind(str, Enum):
@@ -60,6 +65,58 @@ class WorkflowJobModel(BaseModel):
     task_id: str = Field(description="Enqueued taskiq job id.")
     workflow: WorkflowKind
     document_id: UUID
+
+
+class WorkflowStatusModel(BaseModel):
+    execution_id: UUID = Field(description="The workflow_execution row id.")
+    workflow: str = Field(description="Which workflow ran (e.g. document_mining).")
+    document_id: UUID = Field(description="The document the run is for.")
+    status: str = Field(
+        description="QUEUED | RUNNING | SUCCEEDED | FAILED.",
+    )
+    running: bool = Field(description="True while the run is queued or in progress.")
+    error: str | None = Field(
+        default=None, description="Failure detail when status is FAILED."
+    )
+    started_at: datetime | None = Field(default=None)
+    finished_at: datetime | None = Field(default=None)
+
+
+class WorkflowListItemModel(BaseModel):
+    execution_id: UUID = Field(description="The workflow_execution row id.")
+    workflow: str = Field(description="Which workflow ran.")
+    document_id: UUID = Field(description="The document the run is for.")
+    document_name: str | None = Field(
+        default=None, description="Name of that document, if any."
+    )
+    status: str = Field(description="QUEUED | RUNNING | SUCCEEDED | FAILED.")
+    running: bool = Field(description="True while queued or in progress.")
+    created_at: datetime
+    started_at: datetime | None = Field(default=None)
+    finished_at: datetime | None = Field(default=None)
+
+
+class WorkflowListPageModel(BaseModel):
+    items: list[WorkflowListItemModel]
+    limit: int
+    offset: int
+    has_more: bool = Field(description="Whether more rows exist past this page.")
+
+
+def list_item_from_row(row: dict) -> WorkflowListItemModel:
+    """Shape a ``list_recent`` row into a list item (shared by /workflows + /audits)."""
+    st = WorkflowStatus(row["status"])
+    return WorkflowListItemModel(
+        execution_id=row["id"],
+        workflow=row["workflow"],
+        document_id=row["entity_id"],
+        document_name=row["document_name"],
+        status=st.name,
+        running=st in (WorkflowStatus.QUEUED, WorkflowStatus.RUNNING),
+        created_at=row["created_at"],
+        started_at=row["started_at"],
+        finished_at=row["finished_at"],
+    )
 
 
 def build_workflows_router(
@@ -126,6 +183,43 @@ def build_workflows_router(
             task_id=task.task_id,
             workflow=body.workflow,
             document_id=body.document_id,
+        )
+
+    @router.get("", summary="List workflow runs (newest first, paged)")
+    async def list_runs(
+        limit: int = Query(50, ge=1, le=200),
+        offset: int = Query(0, ge=0),
+        runs: WorkflowExecutionService = Depends(_runs),
+    ) -> WorkflowListPageModel:
+        # Fetch one extra row to tell whether a next page exists.
+        rows = await runs.list_recent(limit=limit + 1, offset=offset)
+        has_more = len(rows) > limit
+        items = [list_item_from_row(r) for r in rows[:limit]]
+        return WorkflowListPageModel(
+            items=items, limit=limit, offset=offset, has_more=has_more
+        )
+
+    @router.get(
+        "/{execution_id}",
+        summary="Get a workflow run's status",
+        responses={404: {}},
+    )
+    async def get_status(
+        execution_id: UUID, runs: WorkflowExecutionService = Depends(_runs)
+    ) -> WorkflowStatusModel:
+        try:
+            rec = await runs.get(execution_id)
+        except WorkflowExecutionNotFound as exc:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+        return WorkflowStatusModel(
+            execution_id=rec.id,
+            workflow=rec.workflow,
+            document_id=rec.entity_id,
+            status=WorkflowStatus(rec.status).name,
+            running=rec.status in (WorkflowStatus.QUEUED, WorkflowStatus.RUNNING),
+            error=rec.result.error if rec.result else None,
+            started_at=rec.started_at,
+            finished_at=rec.finished_at,
         )
 
     return router

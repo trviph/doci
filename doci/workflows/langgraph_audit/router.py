@@ -9,12 +9,16 @@ explicitly bound. (Audits normally auto-chain off mining success.)
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from doci.audit import AuditService
 from doci.workflows.langgraph_audit.trigger import enqueue_audit
 from doci.workflows.models import WorkflowStatus
+from doci.workflows.router import (
+    WorkflowListPageModel,
+    list_item_from_row,
+)
 from doci.workflows.service import WorkflowExecutionNotFound, WorkflowExecutionService
 
 
@@ -81,6 +85,21 @@ def build_audit_router(
             mining_execution_id=body.mining_execution_id,
             document_id=body.document_id,
             dossier_key=body.dossier_key,
+        )
+
+    @r.get("", summary="List audit runs (newest first, paged)")
+    async def list_audits(
+        limit: int = Query(50, ge=1, le=200),
+        offset: int = Query(0, ge=0),
+        runs_svc: WorkflowExecutionService = Depends(_runs),
+    ) -> WorkflowListPageModel:
+        rows = await runs_svc.list_recent(
+            workflow="audit", limit=limit + 1, offset=offset
+        )
+        has_more = len(rows) > limit
+        items = [list_item_from_row(r) for r in rows[:limit]]
+        return WorkflowListPageModel(
+            items=items, limit=limit, offset=offset, has_more=has_more
         )
 
     @r.get(
