@@ -7,6 +7,7 @@ finally ``SUCCEEDED`` / ``FAILED``. The structured ``input`` / ``result`` /
 ``metadata`` blobs are stored as JSONB via their versioned dataclasses.
 """
 
+from typing import Any
 from uuid import UUID, uuid4
 
 from opentelemetry.trace import SpanKind, get_current_span
@@ -111,6 +112,31 @@ class WorkflowExecutionService:
     ) -> None:
         """Transition to ``FAILED``, storing the error + final metadata."""
         await self._finish(execution_id, WorkflowStatus.FAILED, result, metadata)
+
+    @with_span(kind=SpanKind.CLIENT)
+    @with_metrics()
+    async def list_recent(
+        self, *, workflow: str | None = None, limit: int = 50, offset: int = 0
+    ) -> list[dict[str, Any]]:
+        """Newest-first executions, each with the name of the document it ran on.
+
+        Pass ``workflow`` to filter by kind (e.g. ``"audit"``). Returns raw rows
+        (id, workflow, entity_id, status, timestamps, document_name) — the router
+        shapes them into its response model.
+        """
+        where = "WHERE e.workflow = %s " if workflow is not None else ""
+        params: list[Any] = [workflow] if workflow is not None else []
+        return await self._pg.fetch_all(
+            "SELECT e.id, e.workflow, e.entity_id, e.status, e.started_at, "
+            "       e.finished_at, e.created_at, d.name AS document_name "
+            "FROM workflow_execution e "
+            "LEFT JOIN document d "
+            "  ON e.entity_type = 'document' AND d.id = e.entity_id "
+            f"{where}"
+            "ORDER BY e.created_at DESC, e.id "
+            "LIMIT %s OFFSET %s",
+            [*params, limit, offset],
+        )
 
     @with_span(kind=SpanKind.CLIENT)
     @with_metrics()
