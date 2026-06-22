@@ -1,10 +1,13 @@
 """Compose the image document-mining child workflow as a LangGraph graph.
 
-Two branches run in parallel from START — thumbnail, and extract→annotate — and
+A linear chain — thumbnail first (its own superstep), then extract→annotate, then
 join at ``done``:
 
-    START → thumbnail ───────────────┐
-    START → extract → annotate ──────┴→ done → END
+    START → thumbnail → extract → annotate → done → END
+
+The thumbnail runs first and alone so the AI branch can't cancel it mid-upload: it
+commits to the checkpoint in its own superstep, so its ``thumb_media_id`` survives
+an extract/annotate failure and the part links on the eventual successful re-run.
 
 Built with pure DI (already-constructed activities). Pass a ``checkpointer`` for
 standalone durable runs; leave it ``None`` when embedded as a parent subgraph (the
@@ -52,9 +55,8 @@ def build_document_mining_image_graph(
     g.add_node("done", done_node)
 
     g.add_edge(START, "thumbnail")
-    g.add_edge(START, "extract")
+    g.add_edge("thumbnail", "extract")
     g.add_edge("extract", "annotate")
-    g.add_edge("thumbnail", "done")
     g.add_edge("annotate", "done")
     g.add_edge("done", END)
     return g.compile(checkpointer=checkpointer)
