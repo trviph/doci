@@ -179,18 +179,10 @@ class MediaService:
         if existing is not None:
             return MediaRecord.from_row(existing)
         data, mime = await render()
-
-        # Upload + row-insert as one uncancellable unit: the S3 PUT runs on a
-        # worker thread (it finishes even if we're cancelled), so a cancellation
-        # landing between the two awaits would orphan the object — store it without
-        # ever writing its row. Shielding guarantees "S3 object ⟹ media row".
-        async def _persist() -> MediaRecord:
-            await self.upload_object(thumb_key, data, mime)
-            return await self.insert_blob(
-                self._pg, object_key=thumb_key, mime=mime, size=len(data)
-            )
-
-        return await asyncio.shield(_persist())
+        await self.upload_object(thumb_key, data, mime)
+        return await self.insert_blob(
+            self._pg, object_key=thumb_key, mime=mime, size=len(data)
+        )
 
     # endregion
 
