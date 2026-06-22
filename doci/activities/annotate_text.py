@@ -80,10 +80,12 @@ def _user_prompt(
         )
         instruction = (
             f'This document is one document from the "{dossier.name}" dossier. '
-            "Decide which ONE of these document types it is and set `item_key` to "
-            "that type's key (or null if none match). Then extract any "
-            "audit-relevant facts its “look for” note calls out into "
-            f"`facts`.\n\nDocument types:\n{catalog}"
+            "Set `item_key` to a type's key only when this document's own "
+            "title/heading/declared name — or content that clearly matches that "
+            "type's description/“look for” note — identifies it as that type; "
+            "otherwise set it to null. Never classify by topic or relatedness; "
+            "do not guess. Then extract any audit-relevant facts the matched "
+            f"type's “look for” note calls out into `facts`.\n\nDocument types:\n{catalog}"
         )
     else:
         instruction = "Annotate the document below."
