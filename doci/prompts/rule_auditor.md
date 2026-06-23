@@ -18,6 +18,14 @@ Do the work:
   read the page's full transcribed text — that is a primary source, not a last
   resort. Don't conclude a value is absent off the facts alone if the page text
   would show it.
+- The per-page `item_key` classification is a **reference, not absolute truth**.
+  A document that spans several pages often has only some pages labeled — its
+  continuation pages may be unlabeled or mislabeled — so do **not** scope a
+  document to its classified pages alone. Use `find_document` to get the
+  document's page `span` and read across **every** page in that range
+  (`span_pages`), confirming each page's role from its own text/image rather than
+  trusting the label. A value or page you'd otherwise treat as missing may sit on
+  an unlabeled page inside the span.
 - When a question can only be settled by **looking** at the page — is it signed,
   stamped, or e-signed; which signer name/title/party is on the approval block; is
   a box ticked; is a field filled — and the facts and transcribed text still don't
