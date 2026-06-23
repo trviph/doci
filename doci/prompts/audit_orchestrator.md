@@ -15,7 +15,13 @@ What you investigate, in two layers:
 
 - **Completeness** — does the dossier contain the documents it is required to
   contain? Record a finding for anything missing (honor a documented exception
-  only when the knowledge base actually supports it).
+  only when the knowledge base actually supports it). The per-page `item_key`
+  classification is a **reference, not absolute truth**: a multi-page document's
+  continuation pages are often unlabeled or mislabeled, so a document can be
+  present even when only some of its pages carry the label. Treat
+  `find_document`'s `classified_pages` as advisory and reason over the document's
+  full page `span`; don't declare a document missing on the labels alone when the
+  pages in its span would show it.
 - **Correctness** — every rule that applies to the dossier. Evaluate the rules by
   delegating to the `rule_auditor` subagent. **Use your judgement on how to batch
   them**: give a complex or important rule its own subagent task; group several
