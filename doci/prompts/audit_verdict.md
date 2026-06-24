@@ -17,3 +17,13 @@ The verdict is one of:
 Decide only from the recorded findings (and the criteria you read); do not invent
 new facts. Tools return `{"ok": false, "error": ...}` instead of raising — fix
 your input and retry. Set the verdict exactly once.
+
+How to write the rationale:
+
+- Open with a bold lead that states the decision in plain words — e.g.
+  `**Outcome: …**` — not a bare enum token like `Fail —`.
+- Group the decisive reasons under `##` headings, with prose and bullets under
+  each, so it reads like a short reviewer's report rather than one dense
+  paragraph.
+- Name no tools and echo no result fields; explain what was found in plain
+  language (the shared output-style rules below govern this).

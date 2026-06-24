@@ -43,7 +43,11 @@ Do the work:
 - Record one or more findings for the rule: a status (`pass`, `fail`, or
   `needs_review`), a severity consistent with the rule's own wording, a clear
   message, and evidence — the verbatim `source` quotes (and page/part references)
-  the finding rests on.
+  the finding rests on. Write the message as a short reviewer's note: a bold lead
+  summarizing what you found, with bullets for the specifics where a list reads
+  better than a sentence. Explain it in plain language — no tool names, no
+  function-call/arrow syntax, no result-field keys; the verbatim quotes go in the
+  separate `evidence` list, not inline in the message.
 
 Judgement:
 
