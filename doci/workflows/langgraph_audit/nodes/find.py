@@ -41,6 +41,7 @@ def make_find_node(clients: "Clients", checkpointer: BaseCheckpointSaver | None)
             mining_execution_id=state["mining_execution_id"],
             audit_execution_id=eid,
             dossier_key=state["dossier_key"],
+            language=state.get("language", "English"),
             checkpointer=checkpointer,
         )
         await asyncio.wait_for(

@@ -18,7 +18,7 @@ from langgraph.graph.state import CompiledStateGraph
 
 from doci.agents.rule_auditor import build_rule_auditor
 from doci.llm import build_chat_model
-from doci.prompts import load
+from doci.prompts import load, output_language_directive
 from doci.tools.check_date_order import check_date_order_tool
 from doci.tools.check_vat import check_vat_tool
 from doci.tools.collect_facts import build_collect_facts
@@ -92,6 +92,7 @@ def build_finding_agent(
     mining_execution_id: UUID,
     audit_execution_id: UUID,
     dossier_key: str,
+    language: str = "English",
     model: BaseChatModel | None = None,
     checkpointer: BaseCheckpointSaver | None = None,
 ) -> CompiledStateGraph:
@@ -127,7 +128,7 @@ def build_finding_agent(
 
     # rule subagent: evidence + deterministic + knowledge + record_finding
     sub_base = [*evidence, search_kb, get_kb, record, *_DETERMINISTIC]
-    rule_sub = build_rule_auditor(sub_base, _TAGS, model)
+    rule_sub = build_rule_auditor(sub_base, _TAGS, model, language=language)
 
     # orchestrator: requirements + coverage + knowledge + record
     orch_base = [
@@ -147,7 +148,7 @@ def build_finding_agent(
     return create_deep_agent(
         model=model,
         tools=orch_tools,
-        system_prompt=load("audit_orchestrator"),
+        system_prompt=load("audit_orchestrator") + output_language_directive(language),
         subagents=[rule_sub],
         checkpointer=checkpointer,
         name="audit",

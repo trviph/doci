@@ -20,7 +20,7 @@ from doci.agents.audit_orchestrator import (
     LLM_TASK,
 )
 from doci.llm import build_chat_model
-from doci.prompts import load
+from doci.prompts import load, output_language_directive
 from doci.tools.get_knowledge import build_get_knowledge
 from doci.tools.list_findings import build_list_findings
 from doci.tools.search_knowledge import build_search_knowledge
@@ -36,6 +36,7 @@ def build_verdict_agent(
     audit_execution_id: UUID,
     dossier_key: str,
     document_id: UUID,
+    language: str = "English",
     model: BaseChatModel | None = None,
     checkpointer: BaseCheckpointSaver | None = None,
 ) -> CompiledStateGraph:
@@ -54,7 +55,7 @@ def build_verdict_agent(
     return create_deep_agent(
         model=model,
         tools=tools,
-        system_prompt=load("audit_verdict"),
+        system_prompt=load("audit_verdict") + output_language_directive(language),
         checkpointer=checkpointer,
         name="audit_verdict",
     )

@@ -19,10 +19,12 @@ async def enqueue_audit(
     document_id: UUID,
     mining_execution_id: UUID,
     dossier_key: str,
+    language: str = "English",
 ) -> UUID:
     """Create an audit ``workflow_execution`` and enqueue ``run_audit`` for it.
 
-    Returns the new audit execution id.
+    ``language`` is the output language for the findings/verdict prose (default
+    English). Returns the new audit execution id.
     """
     thread_id = uuid4()
     execution_id = await runs.create(
@@ -38,5 +40,6 @@ async def enqueue_audit(
         str(mining_execution_id),
         str(thread_id),
         dossier_key,
+        language,
     )
     return execution_id

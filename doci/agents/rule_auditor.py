@@ -12,7 +12,7 @@ from deepagents import SubAgent
 from langchain_core.language_models import BaseChatModel
 from langchain_core.tools.base import BaseTool
 
-from doci.prompts import load
+from doci.prompts import load, output_language_directive
 from doci.tools.find_tools import build_find_tools
 from doci.tools.registry import ToolRegistry
 
@@ -21,6 +21,7 @@ def build_rule_auditor(
     base_tools: Sequence[BaseTool],
     tags: Mapping[str, Sequence[str]],
     model: BaseChatModel | str,
+    language: str = "English",
 ) -> SubAgent:
     """Build the rule-auditor subagent over ``base_tools`` (+ its own find_tools)."""
     registry = ToolRegistry().add((t, tags.get(t.name, ())) for t in base_tools)
@@ -32,7 +33,7 @@ def build_rule_auditor(
             "facts the rule needs, run the deterministic checks, and record findings "
             "(pass / fail / needs_review) with evidence. Delegate one rule at a time."
         ),
-        system_prompt=load("rule_auditor"),
+        system_prompt=load("rule_auditor") + output_language_directive(language),
         tools=tools,
         model=model,
     )

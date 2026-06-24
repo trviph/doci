@@ -29,6 +29,11 @@ class SubmitAuditRequest(BaseModel):
         description="The specific succeeded mining run whose results to audit "
         "(audits normally auto-chain off mining; this is for a manual re-audit).",
     )
+    language: str = Field(
+        default="English",
+        description="Output language for the findings/verdict prose, e.g. "
+        '"English", "Spanish". Source documents are read as-is regardless.',
+    )
 
 
 class AuditJobModel(BaseModel):
@@ -79,6 +84,7 @@ def build_audit_router(
             document_id=body.document_id,
             mining_execution_id=body.mining_execution_id,
             dossier_key=body.dossier_key,
+            language=body.language,
         )
         return AuditJobModel(
             execution_id=execution_id,
