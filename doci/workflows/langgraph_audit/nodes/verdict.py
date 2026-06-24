@@ -38,6 +38,7 @@ def make_verdict_node(clients: "Clients", checkpointer: BaseCheckpointSaver | No
             audit_execution_id=state["audit_execution_id"],
             dossier_key=state["dossier_key"],
             document_id=state["document_id"],
+            language=state.get("language", "English"),
             checkpointer=checkpointer,
         )
         await asyncio.wait_for(

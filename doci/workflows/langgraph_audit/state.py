@@ -11,3 +11,4 @@ class AuditState(TypedDict, total=False):
     mining_execution_id: UUID  # input: the mining run whose results to audit
     audit_execution_id: UUID  # input: this audit run (findings/verdict hang off it)
     dossier_key: str  # input: the dossier to audit against
+    language: str  # input: output language for findings/verdict prose (default English)

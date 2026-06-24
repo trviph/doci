@@ -32,6 +32,7 @@ async def run_audit(
     mining_execution_id: str,
     thread_id: str,
     dossier_key: str,
+    language: str = "English",
 ) -> dict:
     """Audit ``document_id`` for ``dossier_key`` against its mined results."""
     clients = get_clients()
@@ -48,6 +49,7 @@ async def run_audit(
     span.set_attribute("execution_id", audit_execution_id)
     span.set_attribute("mining_execution_id", mining_execution_id)
     span.set_attribute("dossier_key", dossier_key)
+    span.set_attribute("audit_language", language)
     try:
         graph = build_audit_graph(clients, checkpointer=get_saver())
         await asyncio.wait_for(
@@ -57,6 +59,7 @@ async def run_audit(
                     "mining_execution_id": UUID(mining_execution_id),
                     "audit_execution_id": eid,
                     "dossier_key": dossier_key,
+                    "language": language,
                 },
                 config=child_config(
                     None,
