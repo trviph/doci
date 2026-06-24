@@ -33,9 +33,9 @@ def output_language_directive(language: str) -> str:
         "`diff`, `allowed`, `item_key`, and the like), or raw extracted field "
         "labels copied verbatim as if they were machine output;\n"
         "- internal status or severity enum tokens dropped in as inline jargon.\n\n"
-        "Say what those things *mean* in plain words instead: a document is \"not "
-        "in the dossier\", two amounts \"do not agree\", a gap is \"beyond the "
-        "permitted margin\", a check \"could not be completed\". Refer to each "
+        'Say what those things *mean* in plain words instead: a document is "not '
+        'in the dossier", two amounts "do not agree", a gap is "beyond the '
+        'permitted margin", a check "could not be completed". Refer to each '
         "document by its human-readable name, never by an internal key or slug.\n\n"
         "**Use Markdown structure**, not one run-on paragraph and not terse "
         "telegraphic fragments: a short bold lead, `##` headings to group related "
