@@ -28,7 +28,7 @@ Signature, stamp, and approval blocks:
   <signature>
     <type>hand-signed | e-signature | stamp | blank</type>
     <name>printed/typed signer name, if any</name>
-    <title>signer job title/position, if printed</title>
+    <title>signer job title, position, or approval role — including the header that labels the block's cell in an approval table, or a role label printed directly above/beside the block</title>
     <party>organization/party the block belongs to, if shown</party>
     <date>signing/approval date, if shown</date>
     <text>verbatim text in or beside the block (role label, stamp text, etc.)</text>
@@ -37,15 +37,23 @@ Signature, stamp, and approval blocks:
 
 - Emit **one `<signature>` per distinct block** — an approval page often has
   several side by side; keep them separate, never merge.
+- When sign-off blocks sit in an approval table/matrix, the column or row
+  **header** that labels each cell names that signer's role: put it in `<title>`
+  (and keep it verbatim in `<text>`). Reading the header that governs a cell is
+  **not** guessing — it is printed text that belongs to the block. A role label
+  printed directly beside a block is likewise its role. When a block shows no
+  party of its own, the organization that issues the document (the company
+  name/logo/department on the page) is the `<party>`.
 - `type`: `hand-signed` if a handwritten signature mark is visible, `e-signature`
   for a digital/typed e-sign caption, `stamp` for an official stamp or seal,
   `blank` when a role/label line is printed but nothing is signed or stamped. If a
   block is both signed and stamped, pick the dominant `type` and put the stamp
   text in `<text>` (or emit two tokens) — whichever is the simplest faithful
   representation.
-- Fill `name`/`title`/`party`/`date` only from text actually printed on the page;
-  leave a sub-tag out rather than guessing. `<text>` carries the verbatim
-  label/stamp text so nothing is lost.
+- Fill `name`/`title`/`party`/`date` from text printed on the page that belongs
+  to the block — including the header or label that governs its cell; omit a
+  sub-tag only when the page genuinely doesn't show it, never invent one.
+  `<text>` carries the verbatim label/stamp text so nothing is lost.
 
 Visual elements (charts, logos, diagrams, photos, etc.):
 

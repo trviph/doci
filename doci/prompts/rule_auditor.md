@@ -31,6 +31,11 @@ Do the work:
   a box ticked; is a field filled — and the facts and transcribed text still don't
   resolve it, look at the page image and decide from what you see. These questions
   are determinable from the mined data or the image: look, do not defer.
+- For signer identity, the role/title is often given by the approval-table
+  column/row header above the signature, not inside the `<signature>` block, and
+  the party is the document's issuing organization. Read those from the page
+  text/image before concluding a signer's title or party is unstated — an empty
+  `<title>`/`<party>` sub-tag is not, by itself, a missing role or party.
 - For any arithmetic, date-ordering, name-matching, tax/VAT, or format check, use
   the precise tools rather than judging by eye. When a rule references a
   threshold, matrix, or policy (e.g. an approval-authority table), read it from
