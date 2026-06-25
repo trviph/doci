@@ -16,7 +16,6 @@ from collections.abc import Awaitable, Callable
 from uuid import UUID, uuid4
 
 from opentelemetry.trace import SpanKind, get_current_span
-from psycopg2.extras import register_uuid
 
 from doci.cache import Cache
 from doci.helpers import internal
@@ -33,8 +32,6 @@ from doci.objstore import ObjStore
 from doci.postgres import Postgres, Transaction
 from doci.telemetry import traced, with_metrics, with_span
 
-# Adapt uuid.UUID <-> PostgreSQL uuid (params + result columns) process-wide.
-register_uuid()
 
 #: An object that can run statements — the pool (auto-commit per call) or an open
 #: transaction. Both expose the same ``execute``/``fetch_*`` surface, so a caller

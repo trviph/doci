@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
 # Importing doci.telemetry registers the OTel providers + library instrumentation
-# (botocore/psycopg2/redis) and exposes shutdown().
+# (botocore/psycopg/redis) and exposes shutdown().
 from doci import telemetry
 from doci.bootstrap import build_clients, close_clients
 from doci.documents import build_documents_router
@@ -34,6 +34,7 @@ from doci.workflows.router import build_workflows_router
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Build dependencies once and share them via app.state.
     clients = build_clients()
+    await clients.postgres.open()
     app.state.postgres = clients.postgres
     app.state.objstore = clients.objstore
     app.state.kv = clients.kv

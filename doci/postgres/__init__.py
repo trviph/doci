@@ -1,4 +1,4 @@
-"""Postgres — async client over a psycopg2 pool (Supabase-pooler compatible)."""
+"""Postgres — async client over a psycopg (psycopg3) pool (Supabase-pooler compatible)."""
 
 from doci.postgres.client import Postgres, Transaction
 from doci.postgres.config import PostgresConfig

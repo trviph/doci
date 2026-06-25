@@ -11,13 +11,12 @@ from typing import Any
 from uuid import UUID
 
 from opentelemetry.trace import SpanKind
-from psycopg2.extras import Json, register_uuid
+from psycopg.types.json import Jsonb
 
 from doci.audit.models import AuditFinding, AuditVerdict
 from doci.postgres import Postgres
 from doci.telemetry import traced, with_metrics, with_span
 
-register_uuid()
 
 _FINDING_COLS = (
     "id, execution_id, rule_key, severity, status, message, evidence, created_at"
@@ -58,7 +57,7 @@ class AuditService:
                 severity,
                 status,
                 message,
-                Json(list(evidence or [])),
+                Jsonb(list(evidence or [])),
             ],
         )
         return AuditFinding.from_row(row)

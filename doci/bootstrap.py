@@ -89,4 +89,4 @@ async def close_clients(clients: Clients) -> None:
     """Release the shared clients (inverse of :func:`build_clients`)."""
     await clients.kv.aclose()
     clients.objstore.close()
-    clients.postgres.close()
+    await clients.postgres.aclose()

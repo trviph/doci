@@ -11,7 +11,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from opentelemetry.trace import SpanKind, get_current_span
-from psycopg2.extras import Json, register_uuid
+from psycopg.types.json import Jsonb
 
 from doci.postgres import Postgres
 from doci.telemetry import traced, with_metrics, with_span
@@ -23,8 +23,6 @@ from doci.workflows.models import (
     WorkflowStatus,
 )
 
-# Adapt uuid.UUID <-> PostgreSQL uuid (params + result columns) process-wide.
-register_uuid()
 
 _COLS = (
     "id, workflow, entity_type, entity_id, status, input, result, metadata, "
@@ -67,8 +65,8 @@ class WorkflowExecutionService:
                 entity_type,
                 entity_id,
                 int(WorkflowStatus.QUEUED),
-                Json(input.to_json()),
-                Json(metadata.to_json()),
+                Jsonb(input.to_json()),
+                Jsonb(metadata.to_json()),
             ],
         )
         return execution_id
@@ -83,7 +81,7 @@ class WorkflowExecutionService:
         await self._pg.execute(
             "UPDATE workflow_execution SET metadata = %s, updated_at = now() "
             "WHERE id = %s",
-            [Json(metadata.to_json()), execution_id],
+            [Jsonb(metadata.to_json()), execution_id],
         )
 
     @with_span(kind=SpanKind.CLIENT)
@@ -163,8 +161,8 @@ class WorkflowExecutionService:
             "finished_at = now(), updated_at = now() WHERE id = %s",
             [
                 int(status),
-                Json(result.to_json()),
-                Json(metadata.to_json()),
+                Jsonb(result.to_json()),
+                Jsonb(metadata.to_json()),
                 execution_id,
             ],
         )

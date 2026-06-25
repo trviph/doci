@@ -9,8 +9,7 @@ keys and soft delete; the link is managed from the rule side
 from collections.abc import Sequence
 
 from opentelemetry.trace import SpanKind
-from psycopg2 import errors as pg_errors
-from psycopg2.extras import register_uuid
+from psycopg import errors as pg_errors
 
 from doci.postgres import Postgres
 from doci.telemetry import traced, with_metrics, with_span
@@ -19,7 +18,6 @@ from doci.userdata.dossiers.models import DossierDef
 from doci.userdata.errors import DuplicateKey, NotFound
 from doci.userdata.rules.models import AgentRule
 
-register_uuid()
 
 _COLS = "id, key, name, body, deleted_at, created_at, updated_at"
 _DOSSIER_COLS = "id, key, name, description, deleted_at, created_at, updated_at"

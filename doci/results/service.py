@@ -15,15 +15,13 @@ import json
 from uuid import UUID
 
 from opentelemetry.trace import SpanKind, get_current_span
-from psycopg2.extras import Json, register_uuid
+from psycopg.types.json import Jsonb
 
 from doci.helpers import internal
 from doci.postgres import Postgres
 from doci.results.models import PageRef, ResultKind, WorkflowResultRecord
 from doci.telemetry import traced, with_metrics, with_span
 
-# Adapt uuid.UUID <-> PostgreSQL uuid (params + result columns) process-wide.
-register_uuid()
 
 _COLS = "id, execution_id, part_id, kind, content, created_at, updated_at"
 
@@ -61,7 +59,7 @@ class WorkflowResultService:
             "ON CONFLICT (execution_id, part_id, kind) "
             "DO UPDATE SET content = EXCLUDED.content, updated_at = now() "
             "RETURNING id",
-            [execution_id, part_id, str(kind), Json(content)],
+            [execution_id, part_id, str(kind), Jsonb(content)],
         )
 
     # region read API (the audit/deepagents tools call these)

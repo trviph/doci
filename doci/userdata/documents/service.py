@@ -7,7 +7,6 @@ omitted one derives a fresh slug.
 """
 
 from opentelemetry.trace import SpanKind
-from psycopg2.extras import register_uuid
 
 from doci.postgres import Postgres
 from doci.telemetry import traced, with_metrics, with_span
@@ -15,7 +14,6 @@ from doci.userdata.common import gen_key
 from doci.userdata.documents.models import DocumentDef
 from doci.userdata.errors import NotFound
 
-register_uuid()
 
 _COLS = "id, dossier_id, key, name, description, look_for, created_at, updated_at"
 
