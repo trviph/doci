@@ -20,6 +20,7 @@ from commands.worker_mon import create_mon_app
 from doci.api import create_app
 from doci.scheduler import scheduler
 from doci.taskiq.broker import broker
+from doci.taskiq.config import TaskiqConfig
 
 # Import task modules so their @broker.task / event handlers register on import.
 import doci.workflows.langgraph_audit.task  # noqa: F401, E402
@@ -38,9 +39,15 @@ async def _run_receiver(finish: asyncio.Event) -> None:
     forever. ``run_startup=True`` fires WORKER_STARTUP; the FastAPI lifespan
     independently fires CLIENT_STARTUP via ``broker.startup()`` in app.py.
     """
+    cfg = TaskiqConfig.from_env()
     broker.is_worker_process = True
-    with ThreadPoolExecutor() as executor:
-        receiver = Receiver(broker=broker, executor=executor, run_startup=True)
+    with ThreadPoolExecutor(max_workers=cfg.max_threadpool_threads) as executor:
+        receiver = Receiver(
+            broker=broker,
+            executor=executor,
+            run_startup=True,
+            max_async_tasks=cfg.max_async_tasks,
+        )
         await receiver.listen(finish)
 
 
