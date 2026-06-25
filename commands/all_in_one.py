@@ -39,6 +39,9 @@ async def _run_receiver(finish: asyncio.Event) -> None:
     forever. ``run_startup=True`` fires WORKER_STARTUP; the FastAPI lifespan
     independently fires CLIENT_STARTUP via ``broker.startup()`` in app.py.
     """
+    # Single in-process receiver — no subprocess workers — so map the worker×async
+    # model onto one semaphore sized to the product. This makes TASKIQ_WORKERS take
+    # effect here too (it otherwise only reaches the doci-worker CLI).
     cfg = TaskiqConfig.from_env()
     broker.is_worker_process = True
     with ThreadPoolExecutor(max_workers=cfg.max_threadpool_threads) as executor:
@@ -46,7 +49,7 @@ async def _run_receiver(finish: asyncio.Event) -> None:
             broker=broker,
             executor=executor,
             run_startup=True,
-            max_async_tasks=cfg.max_async_tasks,
+            max_async_tasks=cfg.total_concurrency,
         )
         await receiver.listen(finish)
 
