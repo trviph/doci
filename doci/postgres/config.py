@@ -25,6 +25,9 @@ class PostgresConfig:
     application_name: str = "doci"
     pool_min: int = 1
     pool_max: int = 10
+    # Seconds a caller waits for a free connection before psycopg_pool raises
+    # PoolTimeout. The pool QUEUES here instead of opening unbounded connections.
+    pool_timeout: float = 30.0
 
     @classmethod
     def from_env(cls) -> "PostgresConfig":
@@ -41,22 +44,31 @@ class PostgresConfig:
             application_name=os.getenv("PGAPPNAME", "doci"),
             pool_min=int(os.getenv("POSTGRES_POOL_MIN", "1")),
             pool_max=int(os.getenv("POSTGRES_POOL_MAX", "10")),
+            pool_timeout=float(os.getenv("POSTGRES_POOL_TIMEOUT", "30")),
         )
 
-    def connect_kwargs(self) -> dict[str, Any]:
-        """Keyword args passed through the pool to ``psycopg2.connect``.
+    def conninfo(self) -> str:
+        """The DSN passed verbatim to the pool, or ``""`` when using discrete fields."""
+        return self.dsn or ""
 
-        When a DSN is set it is used verbatim (so a Supabase pooler URL — incl. its
+    def connect_kwargs(self) -> dict[str, Any]:
+        """Per-connection kwargs the pool passes to ``psycopg.AsyncConnection.connect``.
+
+        Always disables server-side prepared statements (``prepare_threshold=None``)
+        so the client works through the Supabase Supavisor transaction-mode pooler,
+        which cannot carry prepared statements across pooled backends. When a DSN is
+        set it is used verbatim as the conninfo (so a Supavisor URL — incl. its
         ``postgres.<project-ref>`` tenant username and its own ``sslmode`` — is
-        respected); only safe extras are added. Otherwise discrete fields, with
-        ``sslmode`` applied, are used.
+        respected) and only safe extras are added here; otherwise discrete fields,
+        with ``sslmode`` applied, are used.
         """
         common: dict[str, Any] = {
             "connect_timeout": self.connect_timeout,
             "application_name": self.application_name,
+            "prepare_threshold": None,
         }
         if self.dsn:
-            return {"dsn": self.dsn, **common}
+            return common
         return {
             "host": self.host,
             "port": self.port,

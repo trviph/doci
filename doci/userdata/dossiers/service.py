@@ -7,8 +7,7 @@ dossier expects live in ``document_def`` (see :mod:`doci.userdata.documents`).
 from collections.abc import Sequence
 
 from opentelemetry.trace import SpanKind
-from psycopg2 import errors as pg_errors
-from psycopg2.extras import register_uuid
+from psycopg import errors as pg_errors
 
 from doci.postgres import Postgres
 from doci.telemetry import traced, with_metrics, with_span
@@ -16,7 +15,6 @@ from doci.userdata.common import ListPage, _page_bounds, gen_key
 from doci.userdata.dossiers.models import DossierDef
 from doci.userdata.errors import DuplicateKey, NotFound
 
-register_uuid()
 
 _COLS = "id, key, name, description, deleted_at, created_at, updated_at"
 

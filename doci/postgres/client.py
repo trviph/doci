@@ -1,20 +1,21 @@
-"""Postgres client over a psycopg2 connection pool.
+"""Postgres client over a psycopg (psycopg3) async connection pool.
 
-Exposes an ``async`` API that offloads blocking psycopg2 calls with
-:func:`asyncio.to_thread`, so it can be awaited from FastAPI handlers without
-blocking the event loop. Works against a direct Postgres connection and the
-Supabase Supavisor pooler (psycopg2 uses no server-side prepared statements, so
-transaction-mode pooling needs no special handling).
+Exposes an ``async`` API backed by :class:`psycopg_pool.AsyncConnectionPool`.
+The pool's ``max_size`` hard-caps live server connections and ``connection()``
+*blocks up to ``timeout``* for a free connection — so a burst of concurrent
+callers (e.g. the audit agent's fan-out) QUEUES through a small reused pool
+instead of opening connections without bound. Works against a direct Postgres
+connection and the Supabase Supavisor pooler (``prepare_threshold=None`` disables
+server-side prepared statements, which transaction-mode pooling cannot carry).
 """
 
-import asyncio
 from collections.abc import AsyncIterator, Mapping, Sequence
 from contextlib import asynccontextmanager
 from typing import Any
 
 from opentelemetry.trace import SpanKind, get_current_span
-from psycopg2.extras import RealDictCursor
-from psycopg2.pool import ThreadedConnectionPool
+from psycopg.rows import dict_row
+from psycopg_pool import AsyncConnectionPool
 
 from doci.postgres.config import PostgresConfig
 from doci.telemetry import Counter, current_report, traced, with_metrics, with_span
@@ -29,22 +30,9 @@ def _annotate() -> None:
     get_current_span().set_attribute("db.system", "postgresql")
 
 
-def _exec(conn: Any, query: str, params: _Params, fetch: str) -> Any:
-    """Run ``query`` on ``conn`` and return the requested result shape.
-
-    ``fetch`` is one of ``"all"`` / ``"one"`` / ``"val"`` / ``"none"``. Does not
-    commit — the caller owns transaction boundaries.
-    """
-    with conn.cursor() as cur:
-        cur.execute(query, params)
-        if fetch == "all":
-            return cur.fetchall()
-        if fetch == "one":
-            return cur.fetchone()
-        if fetch == "val":
-            row = cur.fetchone()
-            return next(iter(row.values())) if row else None
-        return cur.rowcount
+def _val(row: dict[str, Any] | None) -> Any:
+    """First column of a single row (or ``None``)."""
+    return next(iter(row.values())) if row else None
 
 
 @traced
@@ -64,7 +52,9 @@ class Transaction:
         self, query: str, params: _Params = None
     ) -> list[dict[str, Any]]:
         _annotate()
-        return await asyncio.to_thread(_exec, self._conn, query, params, "all")
+        async with self._conn.cursor() as cur:
+            await cur.execute(query, params)
+            return await cur.fetchall()
 
     @with_span(kind=SpanKind.CLIENT)
     @with_metrics()
@@ -72,36 +62,45 @@ class Transaction:
         self, query: str, params: _Params = None
     ) -> dict[str, Any] | None:
         _annotate()
-        return await asyncio.to_thread(_exec, self._conn, query, params, "one")
+        async with self._conn.cursor() as cur:
+            await cur.execute(query, params)
+            return await cur.fetchone()
 
     @with_span(kind=SpanKind.CLIENT)
     @with_metrics()
     async def fetch_val(self, query: str, params: _Params = None) -> Any:
         _annotate()
-        return await asyncio.to_thread(_exec, self._conn, query, params, "val")
+        async with self._conn.cursor() as cur:
+            await cur.execute(query, params)
+            return _val(await cur.fetchone())
 
     @with_span(kind=SpanKind.CLIENT)
     @with_metrics()
     async def execute(self, query: str, params: _Params = None) -> int:
         _annotate()
-        return await asyncio.to_thread(_exec, self._conn, query, params, "none")
+        async with self._conn.cursor() as cur:
+            await cur.execute(query, params)
+            return cur.rowcount
 
 
 @traced
 class Postgres:
-    """Async Postgres client backed by a thread-safe connection pool.
+    """Async Postgres client backed by a bounded, blocking connection pool.
 
-    Construct with a :class:`PostgresConfig` (or :meth:`from_env`) and inject it
-    where database access is needed.
+    Construct with a :class:`PostgresConfig` (or :meth:`from_env`), then
+    :meth:`open` it inside the running event loop; inject it where database
+    access is needed and :meth:`aclose` on shutdown.
     """
 
     def __init__(self, config: PostgresConfig) -> None:
         self._config = config
-        self._pool = ThreadedConnectionPool(
-            config.pool_min,
-            config.pool_max,
-            cursor_factory=RealDictCursor,
-            **config.connect_kwargs(),
+        self._pool = AsyncConnectionPool(
+            conninfo=config.conninfo(),
+            kwargs={**config.connect_kwargs(), "row_factory": dict_row},
+            min_size=config.pool_min,
+            max_size=config.pool_max,
+            timeout=config.pool_timeout,
+            open=False,
         )
 
     @classmethod
@@ -109,34 +108,17 @@ class Postgres:
         return cls(PostgresConfig.from_env())
 
     # region lifecycle
+    async def open(self) -> None:
+        """Open the pool (must run inside the event loop). Idempotent."""
+        await self._pool.open()
+
     async def ping(self) -> None:
         """Liveness probe; raises if the database is unreachable. Used by health checks."""
-        await asyncio.to_thread(self._run, "select 1", None, "val")
+        await self.fetch_val("select 1")
 
-    def close(self) -> None:
+    async def aclose(self) -> None:
         """Close all pooled connections. Call on application shutdown."""
-        self._pool.closeall()
-
-    def __enter__(self) -> "Postgres":
-        return self
-
-    def __exit__(self, *exc: object) -> None:
-        self.close()
-
-    # endregion
-
-    # region internals
-    def _run(self, query: str, params: _Params, fetch: str) -> Any:
-        conn = self._pool.getconn()
-        try:
-            result = _exec(conn, query, params, fetch)
-            conn.commit()
-            return result
-        except BaseException:
-            conn.rollback()
-            raise
-        finally:
-            self._pool.putconn(conn)
+        await self._pool.close()
 
     # endregion
 
@@ -147,7 +129,9 @@ class Postgres:
         self, query: str, params: _Params = None
     ) -> list[dict[str, Any]]:
         _annotate()
-        rows = await asyncio.to_thread(self._run, query, params, "all")
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(query, params)
+            rows = await cur.fetchall()
         current_report().record(PG_ROWS, len(rows))
         return rows
 
@@ -157,19 +141,25 @@ class Postgres:
         self, query: str, params: _Params = None
     ) -> dict[str, Any] | None:
         _annotate()
-        return await asyncio.to_thread(self._run, query, params, "one")
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(query, params)
+            return await cur.fetchone()
 
     @with_span(kind=SpanKind.CLIENT)
     @with_metrics()
     async def fetch_val(self, query: str, params: _Params = None) -> Any:
         _annotate()
-        return await asyncio.to_thread(self._run, query, params, "val")
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(query, params)
+            return _val(await cur.fetchone())
 
     @with_span(kind=SpanKind.CLIENT)
     @with_metrics()
     async def execute(self, query: str, params: _Params = None) -> int:
         _annotate()
-        return await asyncio.to_thread(self._run, query, params, "none")
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(query, params)
+            return cur.rowcount
 
     # endregion
 
@@ -177,14 +167,7 @@ class Postgres:
     @asynccontextmanager
     async def transaction(self) -> AsyncIterator[Transaction]:
         """Pin one pooled connection across statements; commit on exit, rollback on error."""
-        conn = await asyncio.to_thread(self._pool.getconn)
-        try:
+        async with self._pool.connection() as conn:
             yield Transaction(conn)
-            await asyncio.to_thread(conn.commit)
-        except BaseException:
-            await asyncio.to_thread(conn.rollback)
-            raise
-        finally:
-            self._pool.putconn(conn)
 
     # endregion

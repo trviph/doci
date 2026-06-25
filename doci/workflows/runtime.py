@@ -67,7 +67,9 @@ async def final_metadata(
 
 @broker.on_event(TaskiqEvents.WORKER_STARTUP)
 async def _startup(state: TaskiqState) -> None:
-    setattr(state, _CLIENTS_ATTR, build_clients())
+    clients = build_clients()
+    await clients.postgres.open()
+    setattr(state, _CLIENTS_ATTR, clients)
     setattr(state, _SAVER_ATTR, build_saver())
 
 
