@@ -33,12 +33,20 @@ class TaskiqConfig:
     monitor_prefix: str = "taskmon"
     monitor_ttl_s: int = 3 * 24 * 3600  # 3 days
     # Worker runtime limits (process/concurrency), distinct from the broker/stream
-    # tuning above. Default to a single worker process — one instance/pod runs one
-    # worker — overriding taskiq's default of 2. ``max_threadpool_threads`` is for
-    # sync tasks; ``None`` leaves taskiq's default in place.
+    # tuning above. Effective parallel tasks = ``workers * max_async_tasks`` in BOTH
+    # deployment modes (see ``total_concurrency``): ``doci-worker`` forks ``workers``
+    # processes each running ``max_async_tasks`` async slots; ``doci-all-in-one`` is
+    # a single in-process receiver sized to the product. Default 1×1 = one task at a
+    # time, matching a single-sequence vLLM. ``max_threadpool_threads`` is for sync
+    # tasks; ``None`` leaves taskiq's default in place.
     workers: int = 1
-    max_async_tasks: int = 100
+    max_async_tasks: int = 1
     max_threadpool_threads: int | None = None
+
+    @property
+    def total_concurrency(self) -> int:
+        """Effective max parallel tasks: worker processes × async slots each."""
+        return self.workers * self.max_async_tasks
 
     @classmethod
     def from_env(cls) -> "TaskiqConfig":
@@ -59,6 +67,6 @@ class TaskiqConfig:
             monitor_prefix=os.getenv("TASKIQ_MONITOR_PREFIX", "taskmon"),
             monitor_ttl_s=int(os.getenv("TASKIQ_MONITOR_TTL_S", str(ttl))),
             workers=int(os.getenv("TASKIQ_WORKERS", "1")),
-            max_async_tasks=int(os.getenv("TASKIQ_MAX_ASYNC_TASKS", "100")),
+            max_async_tasks=int(os.getenv("TASKIQ_MAX_ASYNC_TASKS", "1")),
             max_threadpool_threads=int(max_threads) if max_threads else None,
         )
