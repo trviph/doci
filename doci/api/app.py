@@ -63,7 +63,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 def create_app() -> FastAPI:
     """Build and return the FastAPI application."""
-    app = FastAPI(title="DocI", version=SERVICE_VERSION, lifespan=_lifespan)
+    app = FastAPI(title="Doci", version=SERVICE_VERSION, lifespan=_lifespan)
     # Flag HTTP scopes so `@internal` service methods refuse to run during a
     # request; surface any leak as 403 rather than a 500.
     app.add_middleware(HttpRequestContextMiddleware)

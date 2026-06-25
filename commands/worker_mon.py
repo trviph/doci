@@ -59,7 +59,7 @@ def create_mon_app(*, manage_broker: bool = True) -> FastAPI:
     """
     cfg = TaskiqConfig.from_env()
     schedule_source = RedisScheduleSource(cfg.broker_url)
-    app = FastAPI(title="DocI Worker Monitor", lifespan=_make_lifespan(manage_broker))
+    app = FastAPI(title="Doci Worker Monitor", lifespan=_make_lifespan(manage_broker))
     app.state.schedule_source = schedule_source
     app.include_router(build_task_monitor_router(broker, schedule_source))
     return app

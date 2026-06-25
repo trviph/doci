@@ -4,7 +4,7 @@ Guidance for AI coding agents working in this repository. (`CLAUDE.md` points he
 
 ## What this is
 
-DocI ("Document Intelligent engine") is an agentic document-processing service. It ingests documents (PDF / image), **mines** them (split → OCR/extract → annotate facts → classify against a dossier), then **audits** the mined facts against rules using LLM deep-agents, producing findings and a verdict. Built on FastAPI + TaskIQ + LangGraph + deepagents, backed by Postgres, S3/MinIO, and Valkey/Redis.
+Doci ("Document Intelligent engine") is an agentic document-processing service. It ingests documents (PDF / image), **mines** them (split → OCR/extract → annotate facts → classify against a dossier), then **audits** the mined facts against rules using LLM deep-agents, producing findings and a verdict. Built on FastAPI + TaskIQ + LangGraph + deepagents, backed by Postgres, S3/MinIO, and Valkey/Redis.
 
 ## Commands
 

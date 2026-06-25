@@ -1,8 +1,8 @@
-# DocI
+# Doci
 
 > Document Intelligent engine in an agentic era.
 
-DocI is an agentic document-processing service. It **mines** documents (split → OCR/extract → annotate facts → classify each page against a *dossier*) and then **audits** the mined facts against rules using LLM deep-agents, producing structured **findings** and a **verdict**.
+Doci is an agentic document-processing service. It **mines** documents (split → OCR/extract → annotate facts → classify each page against a *dossier*) and then **audits** the mined facts against rules using LLM deep-agents, producing structured **findings** and a **verdict**.
 
 It's built on **FastAPI** (HTTP API), **TaskIQ** (durable background jobs), **LangGraph** (workflow orchestration), and **deepagents** (the audit agents), backed by **Postgres**, **S3/MinIO**, and **Valkey/Redis**.
 
