@@ -32,11 +32,19 @@ class TaskiqConfig:
     result_ttl_s: int = 3 * 24 * 3600  # 3 days
     monitor_prefix: str = "taskmon"
     monitor_ttl_s: int = 3 * 24 * 3600  # 3 days
+    # Worker runtime limits (process/concurrency), distinct from the broker/stream
+    # tuning above. Default to a single worker process — one instance/pod runs one
+    # worker — overriding taskiq's default of 2. ``max_threadpool_threads`` is for
+    # sync tasks; ``None`` leaves taskiq's default in place.
+    workers: int = 1
+    max_async_tasks: int = 100
+    max_threadpool_threads: int | None = None
 
     @classmethod
     def from_env(cls) -> "TaskiqConfig":
         """Build config from ``TASKIQ_*`` env vars."""
         ttl = 3 * 24 * 3600
+        max_threads = os.getenv("TASKIQ_MAX_THREADPOOL_THREADS")
         return cls(
             broker_url=os.getenv("TASKIQ_BROKER_URL", "redis://localhost:6379/1"),
             queue_name=os.getenv("TASKIQ_QUEUE_NAME", "taskiq"),
@@ -50,4 +58,7 @@ class TaskiqConfig:
             result_ttl_s=int(os.getenv("TASKIQ_RESULT_TTL_S", str(ttl))),
             monitor_prefix=os.getenv("TASKIQ_MONITOR_PREFIX", "taskmon"),
             monitor_ttl_s=int(os.getenv("TASKIQ_MONITOR_TTL_S", str(ttl))),
+            workers=int(os.getenv("TASKIQ_WORKERS", "1")),
+            max_async_tasks=int(os.getenv("TASKIQ_MAX_ASYNC_TASKS", "100")),
+            max_threadpool_threads=int(max_threads) if max_threads else None,
         )
