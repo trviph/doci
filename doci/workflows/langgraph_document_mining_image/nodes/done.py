@@ -6,5 +6,5 @@ from doci.workflows.langgraph_document_mining_image.state import (
 
 
 async def done_node(state: DocumentMiningImageState) -> dict:
-    """Join the thumbnail and extract→annotate branches; nothing to update."""
+    """Join the thumbnail and transcribe branches; nothing to update."""
     return {}
