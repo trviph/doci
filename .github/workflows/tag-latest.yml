@@ -76,6 +76,7 @@ jobs:
         suffix:
           - /api
           - /worker
+          - /worker-mon
           - /scheduler
           - /all-in-one
     steps:

@@ -1,0 +1,11 @@
+# syntax=docker/dockerfile:1.9
+#
+# Worker-monitor image. Build doci-base first, then this image:
+#   docker build -f docker/Dockerfile.base       -t doci-base       .
+#   docker build -f docker/Dockerfile.worker_mon -t doci-worker-mon .
+ARG BASE_IMAGE=doci-base:latest
+FROM ${BASE_IMAGE}
+ENV MON_HOST=0.0.0.0 \
+    MON_PORT=8001
+EXPOSE 8001
+ENTRYPOINT ["doci-worker-mon"]
