@@ -5,6 +5,7 @@ checkpointer are built once on ``WORKER_STARTUP`` (released on shutdown) and
 stashed on ``broker.state``. Both workflow tasks read them via the accessors here.
 """
 
+import logging
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
@@ -12,15 +13,51 @@ from uuid import UUID
 from taskiq import TaskiqEvents, TaskiqState
 
 from doci.bootstrap import Clients, build_clients, close_clients
+from doci.postgres.config import PostgresConfig
 from doci.taskiq import broker
+from doci.taskiq.config import TaskiqConfig
 from doci.workflows.checkpoint import ValkeySaver
 from doci.workflows.checkpoint import aclose as aclose_saver
 from doci.workflows.checkpoint import build_saver
+from doci.workflows.langgraph_document_mining_pdf.nodes import MAX_PAGE_CONCURRENCY
 from doci.workflows.models import LangGraphMeta, WorkflowMetadata
 from doci.workflows.service import WorkflowExecutionService
 
 _CLIENTS_ATTR = "doci_clients"
 _SAVER_ATTR = "doci_checkpointer"
+
+_log = logging.getLogger(__name__)
+
+
+def _concurrency_report(
+    total_concurrency: int,
+    page_concurrency: int,
+    pool_max: int,
+    pool_timeout: float,
+) -> tuple[str, str | None]:
+    """Boot summary of the concurrency↔pool relationship + an optional warning.
+
+    The pool must serve every concurrent task's own DB calls *plus* its page
+    fan-out — roughly ``total_concurrency × page_concurrency`` callers. When
+    ``pool_max`` is below that, the surplus queue up to ``pool_timeout`` then
+    raise ``PoolTimeout``. We don't auto-resize the pool here (it also bounds the
+    Supavisor pooler); we surface the gap so operators raise it deliberately.
+    """
+    needed = total_concurrency * page_concurrency
+    info = (
+        f"worker concurrency: tasks={total_concurrency} × "
+        f"page_fanout={page_concurrency} ⇒ ~{needed} concurrent DB callers; "
+        f"pool_max={pool_max}, pool_timeout={pool_timeout}s"
+    )
+    warning: str | None = None
+    if pool_max < needed:
+        warning = (
+            f"POSTGRES_POOL_MAX={pool_max} is below the ~{needed} connections the "
+            f"page fan-out can demand (tasks {total_concurrency} × page_concurrency "
+            f"{page_concurrency}); surplus callers queue up to {pool_timeout}s then "
+            f"raise PoolTimeout. Raise POSTGRES_POOL_MAX toward {needed}."
+        )
+    return info, warning
 
 
 def get_clients() -> Clients:
@@ -69,6 +106,19 @@ async def final_metadata(
 async def _startup(state: TaskiqState) -> None:
     clients = build_clients()
     await clients.postgres.open()
+
+    taskiq_cfg = TaskiqConfig.from_env()
+    pg_cfg = PostgresConfig.from_env()
+    info, warning = _concurrency_report(
+        taskiq_cfg.total_concurrency,
+        MAX_PAGE_CONCURRENCY,
+        pg_cfg.pool_max,
+        pg_cfg.pool_timeout,
+    )
+    _log.info(info)
+    if warning is not None:
+        _log.warning(warning)
+
     setattr(state, _CLIENTS_ATTR, clients)
     setattr(state, _SAVER_ATTR, build_saver())
 
