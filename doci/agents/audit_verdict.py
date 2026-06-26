@@ -45,6 +45,8 @@ def build_verdict_agent(
         LLM_TASK,
         default_model=LLM_DEFAULT_MODEL,
         default_max_tokens=LLM_DEFAULT_MAX_TOKENS,
+        # Same run as the finding phase — keep its turns on one cache node.
+        cache_key=f"doci:verdict:{audit_execution_id}",
     )
     tools = [
         build_list_findings(clients.audit, audit_execution_id),

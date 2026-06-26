@@ -114,6 +114,10 @@ def build_finding_agent(
         LLM_TASK,
         default_model=LLM_DEFAULT_MODEL,
         default_max_tokens=LLM_DEFAULT_MAX_TOKENS,
+        # Pin this run's turns (and the rule_auditor subagent, which shares this
+        # model) to one cache node — the system prompt + tool history is a growing
+        # identical prefix across the loop.
+        cache_key=f"doci:audit:{audit_execution_id}",
     )
     rds = clients.workflow_results
 
