@@ -53,11 +53,15 @@ def _offload_case(act, monkeypatch, attr: str, slow, label: str) -> None:
 
 
 def test_render_image_pdf_offloads(monkeypatch):
-    _offload_case(RenderImagePdf(), monkeypatch, "_render", _slow_render, "render_image_pdf")
+    _offload_case(
+        RenderImagePdf(), monkeypatch, "_render", _slow_render, "render_image_pdf"
+    )
 
 
 def test_create_thumb_pdf_offloads(monkeypatch):
-    _offload_case(CreateThumbPdf(), monkeypatch, "_render", _slow_render, "create_thumb_pdf")
+    _offload_case(
+        CreateThumbPdf(), monkeypatch, "_render", _slow_render, "create_thumb_pdf"
+    )
 
 
 def test_create_thumb_image_offloads(monkeypatch):
