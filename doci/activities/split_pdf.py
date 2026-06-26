@@ -7,6 +7,7 @@ derivative) plus cheap classification signals — extractable-text length, embed
 page without re-parsing. Rendering pages to images / OCR are separate concerns.
 """
 
+import asyncio
 from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass
 
@@ -44,13 +45,16 @@ class SplitPdf:
         with tracer.start_as_current_span(
             "SplitPdf.__call__", kind=SpanKind.INTERNAL
         ) as span:
-            pages = 0
-            try:
-                for page in self._iter_pages(data):
-                    pages += 1
-                    yield page
-            finally:
-                span.set_attribute("doci.activity.pages", pages)
+            # The split is CPU-bound (mupdf parse + per-page tobytes). Run the
+            # whole pass in ONE worker thread — a pymupdf.Document must be used
+            # from a single thread, and stepping the iterator with per-next()
+            # to_thread calls would hand it to varying threadpool threads. Cost:
+            # all single-page-PDF blobs are held in memory at once (fine for the
+            # doc sizes the 15-min mining timeout implies).
+            pages = await asyncio.to_thread(lambda: list(self._iter_pages(data)))
+            span.set_attribute("doci.activity.pages", len(pages))
+            for page in pages:
+                yield page
 
     def _iter_pages(self, data: bytes) -> Iterator[PdfPage]:
         src = pymupdf.open(stream=data, filetype="pdf")

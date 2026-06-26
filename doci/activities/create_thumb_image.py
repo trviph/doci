@@ -8,6 +8,8 @@ source-agnostic ``extract_content_image`` / ``annotate_image``. PyMuPDF only —
 no Pillow.
 """
 
+import asyncio
+
 import pymupdf
 from opentelemetry.trace import SpanKind
 
@@ -25,7 +27,9 @@ class CreateThumbImage:
     @with_metrics()
     async def __call__(self, data: bytes) -> bytes:
         """Return a small, content-obfuscated PNG of the image as bytes."""
-        return self._render(data)
+        # CPU-bound rasterization — offload so it doesn't block the event loop
+        # (and serialize the page fan-out).
+        return await asyncio.to_thread(self._render, data)
 
     def _render(self, data: bytes) -> bytes:
         # Render at very low resolution so content is blurred/illegible

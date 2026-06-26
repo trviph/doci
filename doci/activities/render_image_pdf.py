@@ -8,6 +8,8 @@ is rasterized here, then handed to ``extract_content_image`` / ``annotate_image`
 page); renders the first page. Returns the raw PNG bytes. PyMuPDF only — no Pillow.
 """
 
+import asyncio
+
 import pymupdf
 from opentelemetry.trace import SpanKind
 
@@ -27,7 +29,9 @@ class RenderImagePdf:
     @with_metrics()
     async def __call__(self, data: bytes) -> bytes:
         """Return the first page rendered as PNG bytes."""
-        return self._render(data)
+        # CPU-bound rasterization — offload so it doesn't block the event loop
+        # (and serialize the page fan-out). See ObjStore for the same pattern.
+        return await asyncio.to_thread(self._render, data)
 
     def _render(self, data: bytes) -> bytes:
         src = pymupdf.open(stream=data, filetype="pdf")
