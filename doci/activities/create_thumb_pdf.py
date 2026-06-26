@@ -11,6 +11,8 @@ rendered to an image and thumbnailed by ``create_thumb_image`` instead. A page
 with no words yields a blank minimap by design — route scanned pages elsewhere.
 """
 
+import asyncio
+
 import pymupdf
 from opentelemetry.trace import SpanKind
 
@@ -29,7 +31,9 @@ class CreateThumbPdf:
     @with_metrics()
     async def __call__(self, data: bytes) -> bytes:
         """Return a small, content-obfuscated PNG of the first page as bytes."""
-        return self._render(data)
+        # CPU-bound layout + rasterization — offload so it doesn't block the
+        # event loop (and serialize the page fan-out).
+        return await asyncio.to_thread(self._render, data)
 
     def _render(self, data: bytes) -> bytes:
         src = pymupdf.open(stream=data, filetype="pdf")
