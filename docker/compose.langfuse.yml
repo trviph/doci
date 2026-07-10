@@ -55,7 +55,7 @@ services:
       LANGFUSE_INIT_PROJECT_NAME: doci
       LANGFUSE_INIT_PROJECT_PUBLIC_KEY: pk-lf-doci-local-public
       LANGFUSE_INIT_PROJECT_SECRET_KEY: sk-lf-doci-local-secret
-      LANGFUSE_INIT_USER_EMAIL: doci@localhost
+      LANGFUSE_INIT_USER_EMAIL: doci@example.com
       LANGFUSE_INIT_USER_NAME: doci
       LANGFUSE_INIT_USER_PASSWORD: doci12345
     healthcheck:
