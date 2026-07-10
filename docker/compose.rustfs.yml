@@ -1,0 +1,58 @@
+services:
+  rustfs:
+    image: rustfs/rustfs:latest
+    # S3-compatible object store (MinIO alternative, written in Rust). Same
+    # ports as the old MinIO service, so the app's S3_* config is unchanged.
+    environment:
+      RUSTFS_ACCESS_KEY: doci
+      RUSTFS_SECRET_KEY: doci12345
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9001
+      RUSTFS_CONSOLE_ENABLE: "true"
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # web console
+    volumes:
+      # Named volume: RustFS runs as UID 10001, so a bind mount would need a
+      # host-side chown — a managed volume sidesteps that.
+      - rustfs_data:/data
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - doci
+
+  # One-shot: create the doci bucket and set a local-friendly 3-day object
+  # expiry (lifecycle) so the volume doesn't grow unbounded. Uses the generic
+  # aws-cli (no vendor client) against the S3-compatible endpoint. Exits when
+  # done.
+  rustfs-init:
+    image: amazon/aws-cli:latest
+    depends_on:
+      rustfs:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: doci
+      AWS_SECRET_ACCESS_KEY: doci12345
+      AWS_DEFAULT_REGION: us-east-1
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        aws --endpoint-url http://rustfs:9000 s3 mb s3://doci || true
+        # Best-effort expiry — tolerated if this RustFS build ignores lifecycle.
+        aws --endpoint-url http://rustfs:9000 s3api put-bucket-lifecycle-configuration \
+          --bucket doci \
+          --lifecycle-configuration '{"Rules":[{"ID":"expire-3d","Status":"Enabled","Filter":{},"Expiration":{"Days":3}}]}' || true ;
+        aws --endpoint-url http://rustfs:9000 s3api get-bucket-lifecycle-configuration --bucket doci || true
+    networks:
+      - doci
+
+volumes:
+  rustfs_data:
+
+networks:
+  doci:
+    name: doci

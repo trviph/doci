@@ -2,7 +2,7 @@ name: doci
 
 include:
   - compose.postgres.yml
-  - compose.minio.yml
+  - compose.rustfs.yml
   - compose.valkey.yml
-  - compose.phoenix.yml
+  - compose.langfuse.yml
   - compose.vllm.yml
