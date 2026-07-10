@@ -18,14 +18,41 @@ module so that ``TaskiqInstrumentor`` has already patched
 ``AsyncBroker.__init__`` before the broker is constructed here.
 """
 
+from collections.abc import AsyncGenerator
+
+from taskiq import AckableMessage
 from taskiq_redis import RedisAsyncResultBackend, RedisStreamBroker
 
 from doci.taskiq.config import TaskiqConfig
 from doci.taskiq.monitor import TaskMonitorMiddleware
 from doci.taskiq.retry import RetryUnlessTimeoutMiddleware
+from doci.telemetry import suppress_instrumentation
+
+
+class _QuietStreamBroker(RedisStreamBroker):
+    """RedisStreamBroker whose idle polling emits no OTel spans.
+
+    The listen loop polls Valkey continuously even when idle — XREADGROUP, plus a
+    lock (GET/SET/EVALSHA) around XAUTOCLAIM — and the redis auto-instrumentor
+    turns each command into a parentless root span that floods the trace UI. We
+    suppress instrumentation *only* while advancing the underlying generator (the
+    poll I/O), then yield outside suppression so the task's own execution spans are
+    still recorded.
+    """
+
+    async def listen(self) -> AsyncGenerator[AckableMessage, None]:  # type: ignore[override]
+        agen = super().listen()
+        while True:
+            with suppress_instrumentation():
+                try:
+                    msg = await agen.__anext__()
+                except StopAsyncIteration:
+                    break
+            yield msg
+
 
 _cfg = TaskiqConfig.from_env()
-broker = RedisStreamBroker(
+broker = _QuietStreamBroker(
     _cfg.broker_url,
     queue_name=_cfg.queue_name,
     consumer_group_name=_cfg.consumer_group_name,

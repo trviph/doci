@@ -13,10 +13,13 @@ import functools
 import inspect
 import time
 from collections.abc import Callable
+from contextlib import contextmanager
 from contextvars import ContextVar, Token
-from typing import Any, ParamSpec, TypeVar, overload
+from typing import Any, Iterator, ParamSpec, TypeVar, overload
 
+from opentelemetry import context as _otel_ctx
 from opentelemetry import metrics, trace
+from opentelemetry.instrumentation.utils import _SUPPRESS_INSTRUMENTATION_KEY
 from opentelemetry.metrics import Counter as _OTelCounter
 from opentelemetry.metrics import Histogram as _OTelHistogram
 from opentelemetry.metrics import UpDownCounter as _OTelUpDownCounter
@@ -27,6 +30,34 @@ _P = ParamSpec("_P")
 _R = TypeVar("_R")
 _C = TypeVar("_C", bound=type)
 _Number = int | float
+
+
+@contextmanager
+def suppress_instrumentation() -> Iterator[None]:
+    """Suppress OTel auto-instrumentation (library client spans) for the block.
+
+    Sets the standard ``_SUPPRESS_INSTRUMENTATION_KEY`` in the OTel context, which
+    the botocore/psycopg/redis instrumentors honor by skipping span creation. Use
+    it to silence high-frequency, low-value library spans — e.g. the Valkey
+    checkpointer's per-step HSET/HKEYS, or TaskIQ's idle broker polling — that
+    would otherwise flood the trace UI and bury the meaningful spans.
+    """
+    token = _otel_ctx.attach(_otel_ctx.set_value(_SUPPRESS_INSTRUMENTATION_KEY, True))
+    try:
+        yield
+    finally:
+        _otel_ctx.detach(token)
+
+
+def untraced(fn: Callable[_P, _R]) -> Callable[_P, _R]:
+    """Decorate an async function to run with auto-instrumentation suppressed."""
+
+    @functools.wraps(fn)
+    async def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
+        with suppress_instrumentation():
+            return await fn(*args, **kwargs)  # type: ignore[misc]
+
+    return wrapper  # type: ignore[return-value]
 
 _DEFAULT_TRACER: Tracer = trace.get_tracer("doci")
 _DEFAULT_METER = metrics.get_meter("doci")

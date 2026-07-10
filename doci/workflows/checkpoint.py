@@ -12,18 +12,14 @@ works against the public contract. Async-only — the synchronous methods raise,
 the graphs are always driven via ``ainvoke``.
 """
 
-import functools
 import os
-from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
-from contextlib import contextmanager
+from collections.abc import AsyncIterator, Awaitable, Sequence
 from dataclasses import dataclass
 from typing import Any, cast
 
 import ormsgpack
 import redis.asyncio as aioredis
 from langchain_core.runnables import RunnableConfig
-from opentelemetry import context as _otel_ctx
-from opentelemetry.instrumentation.utils import _SUPPRESS_INSTRUMENTATION_KEY
 from langgraph.checkpoint.base import (
     WRITES_IDX_MAP,
     BaseCheckpointSaver,
@@ -36,36 +32,12 @@ from langgraph.checkpoint.base import (
     get_checkpoint_metadata,
 )
 
+from doci.telemetry import suppress_instrumentation as _suppress_tracing
+from doci.telemetry import untraced as _untraced
+
 _DEFAULT_URL = "redis://localhost:6379/2"
 _DEFAULT_TTL = 3 * 24 * 60 * 60  # 3 days, in seconds
 _DEFAULT_PREFIX = "doci:ckpt:"
-
-
-@contextmanager
-def _suppress_tracing():
-    """Suppress OTel auto-instrumentation for the duration of the block.
-
-    The checkpointer fires many low-level Valkey commands (HSET/HKEYS/SADD/
-    EXPIRE) on every node step; left traced they flood the trace UI and bury the
-    agent spans. Suppressing here drops only the *checkpointer's* redis spans —
-    the KV cache and taskiq broker (separate clients) keep tracing.
-    """
-    token = _otel_ctx.attach(_otel_ctx.set_value(_SUPPRESS_INSTRUMENTATION_KEY, True))
-    try:
-        yield
-    finally:
-        _otel_ctx.detach(token)
-
-
-def _untraced(fn: Callable) -> Callable:
-    """Run an async checkpointer method with redis tracing suppressed."""
-
-    @functools.wraps(fn)
-    async def wrapper(*args: Any, **kwargs: Any) -> Any:
-        with _suppress_tracing():
-            return await fn(*args, **kwargs)
-
-    return wrapper
 
 
 def _s(value: Any) -> str:

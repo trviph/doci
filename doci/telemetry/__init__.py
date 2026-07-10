@@ -169,7 +169,9 @@ from doci.telemetry.decorators import (  # noqa: E402
     Report,
     UpDownCounter,
     current_report,
+    suppress_instrumentation,
     traced,
+    untraced,
     with_metrics,
     with_span,
 )
@@ -184,6 +186,8 @@ __all__ = [
     "with_span",
     "with_metrics",
     "current_report",
+    "suppress_instrumentation",
+    "untraced",
     "Report",
     "Counter",
     "Histogram",
