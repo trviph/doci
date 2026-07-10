@@ -4,9 +4,6 @@ import os
 from openinference.instrumentation import TraceConfig
 from opentelemetry import metrics, trace
 from opentelemetry._logs import set_logger_provider
-from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
-from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
-from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from openinference.instrumentation.langchain import LangChainInstrumentor
 from opentelemetry.instrumentation.botocore import BotocoreInstrumentor
 from opentelemetry.instrumentation.psycopg import PsycopgInstrumentor
@@ -22,6 +19,40 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 from doci.globals import ENVIRONMENT, RUNTIME_ID, SERVICE_VERSION
 
+# Pick the OTLP exporter transport from the standard OTEL_EXPORTER_OTLP_PROTOCOL
+# env var. gRPC is the default (fast, bidirectional); "http/protobuf" is required
+# by collectors that only speak OTLP/HTTP — e.g. Langfuse, whose OTLP endpoint is
+# http://<host>:3000/api/public/otel. Instantiating a specific exporter class in
+# code (rather than letting the SDK auto-configure) means the env var alone can't
+# switch transports, so we honor it here. Endpoint and headers (e.g. the Basic
+# auth header Langfuse needs) are still read from OTEL_EXPORTER_OTLP_* by the
+# exporter itself, exactly as before.
+if os.getenv("OTEL_EXPORTER_OTLP_PROTOCOL", "grpc").startswith("http"):
+    from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
+    from opentelemetry.exporter.otlp.proto.http.metric_exporter import (
+        OTLPMetricExporter,
+    )
+    from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+else:
+    from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
+    from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import (
+        OTLPMetricExporter,
+    )
+    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+
+
+def _signal_enabled(name: str) -> bool:
+    """Whether an OTLP signal should be exported.
+
+    Honors the standard ``OTEL_{METRICS,LOGS}_EXPORTER`` switch: setting it to
+    ``none`` skips building that pipeline. Langfuse ingests *traces only*, so we
+    turn metrics/logs off there to avoid periodic export failures against an
+    endpoint that has no ``/v1/metrics`` or ``/v1/logs`` route. Traces are always
+    exported.
+    """
+    return os.getenv(name, "otlp").strip().lower() != "none"
+
+
 _SERVICE_NAME = os.getenv("OTEL_SERVICE_NAME", "doci")
 _CUSTOM_RESOURCE = Resource.create(
     {
@@ -29,9 +60,10 @@ _CUSTOM_RESOURCE = Resource.create(
         "deployment.environment": ENVIRONMENT,
         "service.version": SERVICE_VERSION,
         "runtime.id": RUNTIME_ID,
-        # Phoenix groups traces into projects by this OpenInference resource
-        # attribute; default it to the OTel service name so traces land in a
-        # named project (defaults to "doci") instead of "default".
+        # OpenInference-native trace UIs (e.g. Phoenix) group traces into
+        # projects by this resource attribute; default it to the OTel service
+        # name so traces land in a named project instead of "default". Harmless
+        # for backends that route by API key (e.g. Langfuse).
         ResourceAttributes.PROJECT_NAME: _SERVICE_NAME,
     }
 )
@@ -42,16 +74,23 @@ TRACER_PROVIDER.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
 trace.set_tracer_provider(TRACER_PROVIDER)
 
 # --- Metrics ---
-_METRIC_READER = PeriodicExportingMetricReader(OTLPMetricExporter())
+# No metric reader when OTEL_METRICS_EXPORTER=none: the provider still serves
+# in-process instruments (counters/histograms stay live) but nothing is exported.
+_metric_readers = (
+    [PeriodicExportingMetricReader(OTLPMetricExporter())]
+    if _signal_enabled("OTEL_METRICS_EXPORTER")
+    else []
+)
 METER_PROVIDER = MeterProvider(
     resource=_CUSTOM_RESOURCE,
-    metric_readers=[_METRIC_READER],
+    metric_readers=_metric_readers,
 )
 metrics.set_meter_provider(METER_PROVIDER)
 
 # --- Logs ---
 LOGGER_PROVIDER = LoggerProvider(resource=_CUSTOM_RESOURCE)
-LOGGER_PROVIDER.add_log_record_processor(BatchLogRecordProcessor(OTLPLogExporter()))
+if _signal_enabled("OTEL_LOGS_EXPORTER"):
+    LOGGER_PROVIDER.add_log_record_processor(BatchLogRecordProcessor(OTLPLogExporter()))
 set_logger_provider(LOGGER_PROVIDER)
 
 # Bridge stdlib logging into the OTel log pipeline.
