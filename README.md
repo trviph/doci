@@ -4,7 +4,7 @@
 
 Doci is an agentic document-processing service. It **mines** documents (split → OCR/extract → annotate facts → classify each page against a *dossier*) and then **audits** the mined facts against rules using LLM deep-agents, producing structured **findings** and a **verdict**.
 
-It's built on **FastAPI** (HTTP API), **TaskIQ** (durable background jobs), **LangGraph** (workflow orchestration), and **deepagents** (the audit agents), backed by **Postgres**, **S3/MinIO**, and **Valkey/Redis**.
+It's built on **FastAPI** (HTTP API), **TaskIQ** (durable background jobs), **LangGraph** (workflow orchestration), and **deepagents** (the audit agents), backed by **Postgres**, **S3/RustFS**, and **Valkey/Redis**.
 
 ## Requirements
 
@@ -15,7 +15,7 @@ It's built on **FastAPI** (HTTP API), **TaskIQ** (durable background jobs), **La
 | [Atlas](https://atlasgo.io/) | 1.2.1 | Postgres schema migrations |
 | Docker | — | local backing services |
 
-Backing services (run locally via Docker Compose): **Postgres**, **S3/MinIO**, **Valkey/Redis**. Exact pins live in [`.tool-versions`](./.tool-versions) and [`pyproject.toml`](./pyproject.toml).
+Backing services (run locally via Docker Compose): **Postgres**, **S3/RustFS**, **Valkey/Redis**. Exact pins live in [`.tool-versions`](./.tool-versions) and [`pyproject.toml`](./pyproject.toml).
 
 ## Quick start
 
@@ -24,7 +24,7 @@ Backing services (run locally via Docker Compose): **Postgres**, **S3/MinIO**, *
 cp .env.sample .env
 set -a; . ./.env; set +a          # export it into your shell
 
-# 2. Bring up backing services (Postgres :5432, MinIO :9000/:9001, Valkey :6379, Phoenix, vLLM)
+# 2. Bring up backing services (Postgres :5432, RustFS :9000/:9001, Valkey :6379, Langfuse :3000, vLLM)
 docker compose -f docker/compose.yml up -d
 
 # 3. Apply database migrations (DATABASE_URL must be set)
@@ -34,7 +34,7 @@ make atlas-migrate
 uv run doci-all-in-one
 ```
 
-The API serves on `:8000` and the dev task monitor on `:8001` (both env-driven via `PORT` / `MON_PORT`). Local defaults in `.env.sample` match `docker/compose.yml` (Postgres `doci/doci`, MinIO `doci/doci12345`).
+The API serves on `:8000` and the dev task monitor on `:8001` (both env-driven via `PORT` / `MON_PORT`). Local defaults in `.env.sample` match `docker/compose.yml` (Postgres `doci/doci`, RustFS `doci/doci12345`).
 
 ## Architecture (in brief)
 
@@ -50,7 +50,7 @@ The core pipeline is **mining → audit**:
 Persistence splits across three stores:
 
 - **Postgres** — schema managed by **Atlas** versioned migrations (`migrations/`), *not* an ORM auto-migrate. Holds documents, workflow executions, mined results, and audit findings.
-- **S3/MinIO** — raw media and thumbnails, accessed via presigned URLs.
+- **S3/RustFS** — raw media and thumbnails, accessed via presigned URLs.
 - **Valkey/Redis** — three logical dbs: `0` KV cache, `1` TaskIQ broker/results, `2` LangGraph checkpoints.
 
 ## End-to-end usage
@@ -58,7 +58,7 @@ Persistence splits across three stores:
 The HTTP flow to mine and audit a document (API base = the `doci-api` app; task status = the monitor app):
 
 ```bash
-# 1. Create a document → returns {id, upload_url} (presigned S3/MinIO PUT)
+# 1. Create a document → returns {id, upload_url} (presigned S3/RustFS PUT)
 POST /documents            {"name": "invoice.pdf"}
 
 # 2. Upload the bytes to the presigned URL
@@ -141,4 +141,4 @@ Notable `doci/` subpackages:
 
 ## Telemetry
 
-OpenTelemetry instruments the whole stack (FastAPI, botocore, psycopg2, redis, TaskIQ, and LangChain via openinference). [Phoenix](https://phoenix.arize.com/) runs as the local trace UI (`docker/compose.phoenix.yml`).
+OpenTelemetry instruments the whole stack (FastAPI, botocore, psycopg2, redis, TaskIQ, and LangChain via openinference). [Langfuse](https://langfuse.com/) runs as the local trace UI at [http://localhost:3000](http://localhost:3000) — a self-contained multi-service stack (web + worker + Postgres + ClickHouse + Redis + an S3 blob store) defined in `docker/compose.langfuse.yml`. It ingests **traces only**, over OTLP/HTTP with Basic auth; enable it by uncommenting the `OTEL_EXPORTER_OTLP_*` block in `.env.sample` (which sets `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf` and turns metrics/logs export off, since Langfuse accepts traces only).
