@@ -20,6 +20,7 @@ from doci.prompts import load
 from doci.telemetry import traced, with_metrics, with_span
 
 _SYSTEM = load("annotate_image")
+_REFLECT_SYSTEM = load("annotate_image_reflect")
 
 # LLM task profile for this activity. Override via DOCI_LLM_ANNOTATE_IMAGE_* ;
 # shared fallback DOCI_LLM_* .
@@ -30,6 +31,17 @@ LLM_DEFAULT_MODEL = "openai:gpt-5-nano-2025-08-07"
 # so the structured output never truncates. Env DOCI_LLM_* still overrides.
 LLM_DEFAULT_MAX_TOKENS = 16000
 LLM_DEFAULT_PARAMS = {"reasoning_effort": "low"}
+
+# Optional reflection pass — a separately-configured, stronger model that
+# critiques and revises the first pass. Own task so its model/tokens/reasoning
+# tune independently via DOCI_LLM_ANNOTATE_IMAGE_REFLECT_* .
+LLM_REFLECT_TASK = "ANNOTATE_IMAGE_REFLECT"
+LLM_REFLECT_DEFAULT_MODEL = "openai:gpt-5-mini-2025-08-07"
+LLM_REFLECT_DEFAULT_MAX_TOKENS = 16000
+LLM_REFLECT_DEFAULT_PARAMS = {"reasoning_effort": "medium"}
+# Hard ceiling on critique→revise rounds, independent of any model signal. 1 = a
+# single review pass; raising it re-reviews the revised annotation.
+LLM_REFLECT_MAX_ITERS = 1
 
 
 class VisualElement(BaseModel):
@@ -131,12 +143,39 @@ def _user_prompt(
     return prompt
 
 
+def _reflect_prompt(
+    fields: Sequence[FieldSpec] | None,
+    dossier: DossierSpec | None,
+    annotation: ImageAnnotation,
+) -> str:
+    """The reflect instruction: the original instruction, then the first-pass
+    annotation to verify and correct (the image travels in the same message)."""
+    return (
+        f"{_user_prompt(fields, dossier)}\n\n"
+        "<first_pass_annotation>\n"
+        f"{annotation.model_dump_json()}\n"
+        "</first_pass_annotation>"
+    )
+
+
 @traced
 class AnnotateImage:
     """Annotate an image into a structured ImageAnnotation via a vision LLM."""
 
-    def __init__(self, model: BaseChatModel) -> None:
+    def __init__(
+        self,
+        model: BaseChatModel,
+        reflect_model: BaseChatModel | None = None,
+        reflect_max_iters: int = LLM_REFLECT_MAX_ITERS,
+    ) -> None:
         self._model = model.with_structured_output(ImageAnnotation)
+        # None ⇒ reflection unavailable (the env-level gate lives in deps.py).
+        self._reflect_model = (
+            reflect_model.with_structured_output(ImageAnnotation)
+            if reflect_model is not None
+            else None
+        )
+        self._reflect_max_iters = reflect_max_iters
 
     @with_span(kind=SpanKind.INTERNAL)
     @with_metrics()
@@ -145,17 +184,28 @@ class AnnotateImage:
         image: bytes,
         fields: Sequence[FieldSpec] | None = None,
         dossier: DossierSpec | None = None,
+        reflect: bool = False,
     ) -> ImageAnnotation:
         """Return a structured annotation of the ``image`` (PNG/JPEG bytes).
 
         With a ``dossier`` the image is classified to one of its document types
         (``item_key``) and the facts that type's ``look_for`` calls out are
         extracted; otherwise ``fields`` is an optional flat watchlist extracted
-        into ``facts``.
+        into ``facts``. When ``reflect`` is set *and* a reflect model was
+        supplied, a bounded critique→revise pass corrects the first-pass output.
         """
-        return await self._model.ainvoke(
+        annotation = await self._model.ainvoke(
             [
                 SystemMessage(_SYSTEM),
                 image_message(_user_prompt(fields, dossier), image),
             ]
         )
+        if self._reflect_model is not None and reflect:
+            for _ in range(self._reflect_max_iters):
+                annotation = await self._reflect_model.ainvoke(
+                    [
+                        SystemMessage(_REFLECT_SYSTEM),
+                        image_message(_reflect_prompt(fields, dossier, annotation), image),
+                    ]
+                )
+        return annotation
