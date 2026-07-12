@@ -17,6 +17,7 @@ from doci.activities import (
 )
 from doci.activities import annotate_image as _annotate
 from doci.activities import extract_content_image as _extract
+from doci.activities.reflect import annotate_reflect_enabled
 from doci.llm import build_chat_model
 from doci.media import MediaService
 from doci.results import WorkflowResultService
@@ -40,13 +41,26 @@ def build_image_graph(
             default_params=_extract.LLM_DEFAULT_PARAMS,
         )
     )
+    # Reflect model is built (and passed) only when the env switch allows it;
+    # None ⇒ reflection can never run regardless of a run's per-run flag.
+    reflect_model = (
+        build_chat_model(
+            _annotate.LLM_REFLECT_TASK,
+            default_model=_annotate.LLM_REFLECT_DEFAULT_MODEL,
+            default_max_tokens=_annotate.LLM_REFLECT_DEFAULT_MAX_TOKENS,
+            default_params=_annotate.LLM_REFLECT_DEFAULT_PARAMS,
+        )
+        if annotate_reflect_enabled()
+        else None
+    )
     annotate = AnnotateImage(
         build_chat_model(
             _annotate.LLM_TASK,
             default_model=_annotate.LLM_DEFAULT_MODEL,
             default_max_tokens=_annotate.LLM_DEFAULT_MAX_TOKENS,
             default_params=_annotate.LLM_DEFAULT_PARAMS,
-        )
+        ),
+        reflect_model=reflect_model,
     )
     return build_document_mining_image_graph(
         download=DownloadMedia(media),

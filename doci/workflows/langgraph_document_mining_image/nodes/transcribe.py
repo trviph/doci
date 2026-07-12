@@ -38,7 +38,9 @@ def make_transcribe_node(
 
         markdown, annotation = await asyncio.gather(
             extract(data),
-            annotate(data, dossier=dossier),
+            annotate(
+                data, dossier=dossier, reflect=state.get("annotate_reflect", False)
+            ),
         )
 
         execution_id = state["execution_id"]

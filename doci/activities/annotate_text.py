@@ -18,6 +18,7 @@ from doci.prompts import load
 from doci.telemetry import traced, with_metrics, with_span
 
 _SYSTEM = load("annotate_text")
+_REFLECT_SYSTEM = load("annotate_text_reflect")
 
 # LLM task profile for this activity. Override via DOCI_LLM_ANNOTATE_TEXT_* ;
 # shared fallback DOCI_LLM_* .
@@ -28,6 +29,17 @@ LLM_DEFAULT_MODEL = "openai:gpt-5-nano-2025-08-07"
 # Env DOCI_LLM_* still overrides.
 LLM_DEFAULT_MAX_TOKENS = 16000
 LLM_DEFAULT_PARAMS = {"reasoning_effort": "low"}
+
+# Optional reflection pass — a separately-configured, stronger model that
+# critiques and revises the first pass. Own task so its model/tokens/reasoning
+# tune independently via DOCI_LLM_ANNOTATE_TEXT_REFLECT_* .
+LLM_REFLECT_TASK = "ANNOTATE_TEXT_REFLECT"
+LLM_REFLECT_DEFAULT_MODEL = "openai:gpt-5-mini-2025-08-07"
+LLM_REFLECT_DEFAULT_MAX_TOKENS = 16000
+LLM_REFLECT_DEFAULT_PARAMS = {"reasoning_effort": "medium"}
+# Hard ceiling on critique→revise rounds, independent of any model signal. 1 = a
+# single review pass; raising it re-reviews the revised annotation.
+LLM_REFLECT_MAX_ITERS = 1
 
 
 class TextFact(BaseModel):
@@ -99,12 +111,40 @@ def _user_prompt(
     return f"{instruction}\n\n<document>\n{text}\n</document>"
 
 
+def _reflect_prompt(
+    text: str,
+    fields: Sequence[FieldSpec] | None,
+    dossier: DossierSpec | None,
+    annotation: TextAnnotation,
+) -> str:
+    """The reflect message: the original instruction+document, then the first-pass
+    annotation to verify and correct."""
+    return (
+        f"{_user_prompt(text, fields, dossier)}\n\n"
+        "<first_pass_annotation>\n"
+        f"{annotation.model_dump_json()}\n"
+        "</first_pass_annotation>"
+    )
+
+
 @traced
 class AnnotateText:
     """Annotate a plain-text document into a structured TextAnnotation via an LLM."""
 
-    def __init__(self, model: BaseChatModel) -> None:
+    def __init__(
+        self,
+        model: BaseChatModel,
+        reflect_model: BaseChatModel | None = None,
+        reflect_max_iters: int = LLM_REFLECT_MAX_ITERS,
+    ) -> None:
         self._model = model.with_structured_output(TextAnnotation)
+        # None ⇒ reflection unavailable (the env-level gate lives in deps.py).
+        self._reflect_model = (
+            reflect_model.with_structured_output(TextAnnotation)
+            if reflect_model is not None
+            else None
+        )
+        self._reflect_max_iters = reflect_max_iters
 
     @with_span(kind=SpanKind.INTERNAL)
     @with_metrics()
@@ -113,14 +153,27 @@ class AnnotateText:
         text: str,
         fields: Sequence[FieldSpec] | None = None,
         dossier: DossierSpec | None = None,
+        reflect: bool = False,
     ) -> TextAnnotation:
         """Return a structured annotation of the ``text`` document.
 
         With a ``dossier`` the text is classified to one of its document types
         (``item_key``) and the facts that type's ``look_for`` calls out are
         extracted; otherwise ``fields`` is an optional flat watchlist extracted
-        into ``facts``.
+        into ``facts``. When ``reflect`` is set *and* a reflect model was
+        supplied, a bounded critique→revise pass corrects the first-pass output.
         """
-        return await self._model.ainvoke(
+        annotation = await self._model.ainvoke(
             [SystemMessage(_SYSTEM), HumanMessage(_user_prompt(text, fields, dossier))]
         )
+        if self._reflect_model is not None and reflect:
+            for _ in range(self._reflect_max_iters):
+                annotation = await self._reflect_model.ainvoke(
+                    [
+                        SystemMessage(_REFLECT_SYSTEM),
+                        HumanMessage(
+                            _reflect_prompt(text, fields, dossier, annotation)
+                        ),
+                    ]
+                )
+        return annotation

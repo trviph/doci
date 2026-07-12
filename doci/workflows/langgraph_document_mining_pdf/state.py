@@ -43,6 +43,7 @@ class DocumentMiningPdfState(TypedDict, total=False):
     document_id: UUID  # input: the document (parts are created under it)
     execution_id: UUID  # input (the workflow_execution row; used when saving results)
     dossier_spec: dict | None  # input: DossierSpec (dict) for dossier-aware annotate
+    annotate_reflect: bool  # input: run the annotation reflection pass (per-run flag)
     page_count: int  # total pages (set by the split node)
     pages: list[PageRef]  # split pages + classification (set by the split node)
     page_results: list[dict]  # per-page outputs (set by the process node)

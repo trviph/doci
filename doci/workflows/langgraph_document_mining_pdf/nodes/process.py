@@ -54,11 +54,14 @@ def make_process_node(
     """Build the per-page processing node bound to its activities + image graph."""
 
     async def _text_page(
-        page: PageRef, execution_id: UUID, dossier: DossierSpec | None
+        page: PageRef,
+        execution_id: UUID,
+        dossier: DossierSpec | None,
+        reflect: bool,
     ) -> dict:
         data = await download(page.page_media_id)
         markdown = await extract_pdf(data)
-        annotation = await annotate_text(markdown, dossier=dossier)
+        annotation = await annotate_text(markdown, dossier=dossier, reflect=reflect)
 
         async def render() -> tuple[bytes, str]:
             return await create_thumb_pdf(data), MIME_PNG
@@ -87,6 +90,7 @@ def make_process_node(
         document_id: UUID,
         execution_id: UUID,
         dossier_spec: dict | None,
+        annotate_reflect: bool,
         config: RunnableConfig,
     ) -> dict:
         res = await image_graph.ainvoke(
@@ -96,6 +100,7 @@ def make_process_node(
                 "document_id": document_id,
                 "execution_id": execution_id,
                 "dossier_spec": dossier_spec,
+                "annotate_reflect": annotate_reflect,
             },
             config=child_config(
                 config,
@@ -127,14 +132,21 @@ def make_process_node(
         execution_id = state["execution_id"]
         dossier_spec = state.get("dossier_spec")
         dossier = DossierSpec.model_validate(dossier_spec) if dossier_spec else None
+        reflect = state.get("annotate_reflect", False)
         sem = asyncio.Semaphore(max_concurrency)
 
         async def handle(page: PageRef) -> dict:
             async with sem:
                 if page.kind == "text":
-                    return await _text_page(page, execution_id, dossier)
+                    return await _text_page(page, execution_id, dossier, reflect)
                 return await _image_page(
-                    page, thread_id, document_id, execution_id, dossier_spec, config
+                    page,
+                    thread_id,
+                    document_id,
+                    execution_id,
+                    dossier_spec,
+                    reflect,
+                    config,
                 )
 
         results = await asyncio.gather(*(handle(p) for p in state["pages"]))

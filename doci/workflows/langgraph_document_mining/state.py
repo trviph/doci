@@ -53,6 +53,7 @@ class DocumentMiningState(TypedDict, total=False):
     document_id: UUID  # input
     execution_id: UUID  # input (the workflow_execution row; carried to child graphs)
     dossier_spec: dict | None  # input: DossierSpec (dict) for dossier-aware annotate
+    annotate_reflect: bool  # input: run the annotation reflection pass (per-run flag)
     media_id: UUID  # the original blob (set by the finalize node; used by children)
     part_id: UUID  # the source part (set by prepare_image; used by the image child)
     thumb_media_id: UUID | None  # from the image child; recorded by record_image_thumb

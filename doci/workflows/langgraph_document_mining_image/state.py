@@ -17,6 +17,7 @@ class DocumentMiningImageState(TypedDict, total=False):
     document_id: UUID  # input: the owning document (threaded for parity; unused here)
     execution_id: UUID  # input (the workflow_execution row; used when saving results)
     dossier_spec: dict | None  # input: DossierSpec (dict) for dossier-aware annotate
+    annotate_reflect: bool  # input: run the annotation reflection pass (per-run flag)
     thumb_media_id: UUID | None  # set by the thumbnail node
     extract_ref: str | None  # disk path of the extracted Markdown (FIXME: db)
     annotation_ref: str | None  # disk path of the annotation JSON (FIXME: db)
