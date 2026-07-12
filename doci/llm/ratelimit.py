@@ -103,9 +103,7 @@ def _env(task: str, field: str, default: str) -> str:
     """``DOCI_LLM_<TASK>_<field>`` -> ``DOCI_LLM_<field>`` -> ``default`` (truthy chain)."""
     t = task.upper()
     return (
-        os.getenv(f"DOCI_LLM_{t}_{field}")
-        or os.getenv(f"DOCI_LLM_{field}")
-        or default
+        os.getenv(f"DOCI_LLM_{t}_{field}") or os.getenv(f"DOCI_LLM_{field}") or default
     )
 
 
@@ -116,7 +114,9 @@ def resolve_rate_limit(
     if tpm is None:
         tpm = int(_env(task, "RATE_LIMIT_TPM", str(DEFAULT_RATE_LIMIT_TPM)))
     if window_s is None:
-        window_s = int(_env(task, "RATE_LIMIT_WINDOW_S", str(DEFAULT_RATE_LIMIT_WINDOW_S)))
+        window_s = int(
+            _env(task, "RATE_LIMIT_WINDOW_S", str(DEFAULT_RATE_LIMIT_WINDOW_S))
+        )
     return tpm, window_s
 
 

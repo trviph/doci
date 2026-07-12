@@ -37,7 +37,11 @@ def test_acquires_estimate_then_reconciles_actual():
 
     ai = AIMessage(
         content="ok",
-        usage_metadata={"input_tokens": 900, "output_tokens": 100, "total_tokens": 1000},
+        usage_metadata={
+            "input_tokens": 900,
+            "output_tokens": 100,
+            "total_tokens": 1000,
+        },
     )
 
     async def handler(request):
