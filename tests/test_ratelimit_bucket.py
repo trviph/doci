@@ -6,7 +6,6 @@ we drive the client-side loop with a fake ``kv.script`` callable (no Redis).
 
 import asyncio
 
-import pytest
 
 from doci.llm.ratelimit import (
     DEFAULT_RATE_LIMIT_TPM,
