@@ -32,7 +32,11 @@ MAX_RETRIES = 3
 
 @broker.task(retry_on_error=True, max_retries=MAX_RETRIES)
 async def run_document_mining(
-    document_id: str, execution_id: str, thread_id: str, dossier_key: str | None = None
+    document_id: str,
+    execution_id: str,
+    thread_id: str,
+    dossier_key: str | None = None,
+    annotate_reflect: bool = False,
 ) -> dict:
     """Finalize + classify ``document_id`` and route it through the mining graph.
 
@@ -95,6 +99,7 @@ async def run_document_mining(
                     "document_id": UUID(document_id),
                     "execution_id": eid,
                     "dossier_spec": dossier_spec,
+                    "annotate_reflect": annotate_reflect,
                 },
                 config=config,
             ),

@@ -43,7 +43,11 @@ def _page_output(page: dict) -> dict:
 
 @broker.task(retry_on_error=True, max_retries=MAX_RETRIES)
 async def run_document_mining_pdf(
-    document_id: str, execution_id: str, thread_id: str, dossier_key: str | None = None
+    document_id: str,
+    execution_id: str,
+    thread_id: str,
+    dossier_key: str | None = None,
+    annotate_reflect: bool = False,
 ) -> dict:
     """Split + per-page extract/annotate/thumbnail a READY PDF ``document_id``.
 
@@ -78,6 +82,7 @@ async def run_document_mining_pdf(
                     "document_id": did,
                     "execution_id": eid,
                     "dossier_spec": dossier_spec,
+                    "annotate_reflect": annotate_reflect,
                 },
                 config={"configurable": {"thread_id": thread_id}},
             ),

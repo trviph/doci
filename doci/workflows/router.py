@@ -58,6 +58,12 @@ class SubmitWorkflowRequest(BaseModel):
         description="Optional dossier key; annotate classifies each page against "
         "the dossier's document types and extracts the facts their look_for calls out.",
     )
+    annotate_reflect: bool = Field(
+        default=False,
+        description="Run the annotation reflection pass (a second LLM critique+revise "
+        "of each page's labels/facts). Only takes effect when the server enables it "
+        "via DOCI_ANNOTATE_REFLECT; ignored otherwise.",
+    )
 
 
 class WorkflowJobModel(BaseModel):
@@ -159,7 +165,9 @@ def build_workflows_router(
             entity_type="document",
             entity_id=body.document_id,
             input=WorkflowInput(
-                document_id=body.document_id, dossier_key=body.dossier_key
+                document_id=body.document_id,
+                dossier_key=body.dossier_key,
+                annotate_reflect=body.annotate_reflect,
             ),
             metadata=WorkflowMetadata(
                 langgraph=LangGraphMeta(thread_id=str(thread_id))
@@ -170,6 +178,7 @@ def build_workflows_router(
             str(execution_id),
             str(thread_id),
             body.dossier_key,
+            body.annotate_reflect,
         )
         await runs.set_metadata(
             execution_id,

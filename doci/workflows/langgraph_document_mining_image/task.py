@@ -29,7 +29,11 @@ class DocumentNotReady(Exception):
 
 @broker.task(retry_on_error=True, max_retries=MAX_RETRIES)
 async def run_document_mining_image(
-    document_id: str, execution_id: str, thread_id: str, dossier_key: str | None = None
+    document_id: str,
+    execution_id: str,
+    thread_id: str,
+    dossier_key: str | None = None,
+    annotate_reflect: bool = False,
 ) -> dict:
     """Thumbnail + extract + annotate a READY image ``document_id``.
 
@@ -64,6 +68,7 @@ async def run_document_mining_image(
                     "document_id": did,
                     "execution_id": eid,
                     "dossier_spec": dossier_spec,
+                    "annotate_reflect": annotate_reflect,
                 },
                 config={"configurable": {"thread_id": thread_id}},
             ),

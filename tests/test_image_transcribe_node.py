@@ -24,6 +24,7 @@ class _Annotation:
 def _build():
     state = {
         "stats": {"download": 0},
+        "reflect_seen": [],
     }
 
     async def download(_media_id):
@@ -34,7 +35,8 @@ def _build():
         await asyncio.sleep(_LLM)
         return "markdown"
 
-    async def annotate(_data, dossier=None):
+    async def annotate(_data, dossier=None, reflect=False):
+        state["reflect_seen"].append(reflect)
         await asyncio.sleep(_LLM)
         return _Annotation()
 
@@ -66,6 +68,37 @@ def test_transcribe_downloads_once_saves_both_refs():
         "annotation_ref": "ref:annotation.json",
     }
     assert {kind for kind, _ in saved} == {"extract.md", "annotation.json"}
+
+
+def test_transcribe_threads_annotate_reflect_flag():
+    node, stats, _saved = _build()
+    asyncio.run(
+        node(
+            {
+                "media_id": uuid4(),
+                "part_id": uuid4(),
+                "execution_id": uuid4(),
+                "dossier_spec": None,
+                "annotate_reflect": True,
+            }
+        )
+    )
+    assert stats["reflect_seen"] == [True], "per-run reflect flag must reach annotate"
+
+
+def test_transcribe_defaults_reflect_off_when_absent():
+    node, stats, _saved = _build()
+    asyncio.run(
+        node(
+            {
+                "media_id": uuid4(),
+                "part_id": uuid4(),
+                "execution_id": uuid4(),
+                "dossier_spec": None,
+            }
+        )
+    )
+    assert stats["reflect_seen"] == [False], "reflect defaults off when unset"
 
 
 def test_transcribe_runs_extract_and_annotate_in_parallel():

@@ -25,7 +25,7 @@ from typing import Any
 from uuid import UUID
 
 #: Current blob versions. Bump minor for additive changes, major for breaking ones.
-WORKFLOW_INPUT_VERSION = "v1.0"
+WORKFLOW_INPUT_VERSION = "v1.1"  # v1.1: + annotate_reflect
 WORKFLOW_RESULT_VERSION = "v1.0"
 WORKFLOW_METADATA_VERSION = "v1.0"
 
@@ -71,6 +71,7 @@ class WorkflowInput:
 
     document_id: UUID
     dossier_key: str | None = None  # optional dossier for dossier-aware annotate
+    annotate_reflect: bool = False  # per-run: run the annotation reflection pass
     version: str = WORKFLOW_INPUT_VERSION
 
     def to_json(self) -> dict[str, Any]:
@@ -78,6 +79,7 @@ class WorkflowInput:
             "version": self.version,
             "document_id": str(self.document_id),
             "dossier_key": self.dossier_key,
+            "annotate_reflect": self.annotate_reflect,
         }
 
     @classmethod
@@ -87,6 +89,7 @@ class WorkflowInput:
         return cls(
             document_id=UUID(str(data["document_id"])),
             dossier_key=data.get("dossier_key"),
+            annotate_reflect=data.get("annotate_reflect", False),
             version=version,
         )
 
