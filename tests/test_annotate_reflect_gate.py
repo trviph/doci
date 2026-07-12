@@ -9,8 +9,15 @@ from uuid import uuid4
 
 @pytest.mark.parametrize(
     "value,expected",
-    [("1", True), ("true", True), ("YES", True), ("on", True),
-     ("0", False), ("false", False), ("", False)],
+    [
+        ("1", True),
+        ("true", True),
+        ("YES", True),
+        ("on", True),
+        ("0", False),
+        ("false", False),
+        ("", False),
+    ],
 )
 def test_env_gate(monkeypatch, value, expected):
     monkeypatch.setenv("DOCI_ANNOTATE_REFLECT", value)

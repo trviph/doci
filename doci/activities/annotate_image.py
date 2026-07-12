@@ -205,7 +205,9 @@ class AnnotateImage:
                 annotation = await self._reflect_model.ainvoke(
                     [
                         SystemMessage(_REFLECT_SYSTEM),
-                        image_message(_reflect_prompt(fields, dossier, annotation), image),
+                        image_message(
+                            _reflect_prompt(fields, dossier, annotation), image
+                        ),
                     ]
                 )
         return annotation

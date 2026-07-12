@@ -20,8 +20,11 @@ def build_delete_finding(audit: AuditService, execution_id: UUID) -> StructuredT
         findings after verifying against the evidence."""
         try:
             fid = UUID(finding_id)
-        except (ValueError, TypeError):
-            return {"ok": False, "error": f"finding_id must be a UUID, got {finding_id!r}."}
+        except ValueError, TypeError:
+            return {
+                "ok": False,
+                "error": f"finding_id must be a UUID, got {finding_id!r}.",
+            }
         deleted = await audit.delete_finding(execution_id=execution_id, finding_id=fid)
         return {"ok": True, "deleted": bool(deleted)}
 
