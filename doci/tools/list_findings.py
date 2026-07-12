@@ -15,13 +15,14 @@ from doci.audit import AuditService
 
 def build_list_findings(audit: AuditService, execution_id: UUID) -> StructuredTool:
     async def list_findings() -> dict:
-        """List all findings recorded for this audit run (rule_key, status,
-        severity, message, evidence). Base the verdict on these."""
+        """List all findings recorded for this audit run (id, rule_key, status,
+        severity, message, evidence). Use ``id`` to target a finding for deletion."""
         findings = await audit.list_findings(execution_id)
         return {
             "ok": True,
             "findings": [
                 {
+                    "id": str(f.id),
                     "rule_key": f.rule_key,
                     "status": f.status,
                     "severity": f.severity,

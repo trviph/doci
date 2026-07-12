@@ -100,6 +100,18 @@ class AuditService:
 
     @with_span(kind=SpanKind.CLIENT)
     @with_metrics()
+    async def delete_finding(self, *, execution_id: UUID, finding_id: UUID) -> bool:
+        """Delete one finding from this run (dedup/reconcile). Scoped by
+        ``execution_id`` so a run can only touch its own findings. Returns whether
+        a row was deleted."""
+        deleted = await self._pg.execute(
+            "DELETE FROM audit_finding WHERE execution_id = %s AND id = %s",
+            [execution_id, finding_id],
+        )
+        return bool(deleted)
+
+    @with_span(kind=SpanKind.CLIENT)
+    @with_metrics()
     async def clear(self, execution_id: UUID) -> None:
         """Delete this run's findings + verdict (so a retried audit starts clean)."""
         await self._pg.execute(
