@@ -4,7 +4,7 @@ Guidance for AI coding agents working in this repository. (`CLAUDE.md` points he
 
 ## What this is
 
-Doci ("Document Intelligent engine") is an agentic document-processing service. It ingests documents (PDF / image), **mines** them (split → OCR/extract → annotate facts → classify against a dossier), then **audits** the mined facts against rules using LLM deep-agents, producing findings and a verdict. Built on FastAPI + TaskIQ + LangGraph + deepagents, backed by Postgres, S3/MinIO, and Valkey/Redis.
+Doci ("Document Intelligent engine") is an agentic document-processing service. It ingests documents (PDF / image), **mines** them (split → OCR/extract → annotate facts → classify against a dossier), then **audits** the mined facts against rules using LLM deep-agents, producing findings and a verdict. Built on FastAPI + TaskIQ + LangGraph + deepagents, backed by Postgres, S3/RustFS, and Valkey/Redis.
 
 ## Commands
 
@@ -29,7 +29,7 @@ uv run pytest tests/tools/test_parse_money.py::test_x  # one test
 uv run ruff check .
 uv run ruff format .
 
-# Backing services (Postgres :5432, MinIO :9000/:9001, Valkey :6379, Phoenix, vLLM)
+# Backing services (Postgres :5432, RustFS :9000/:9001, Valkey :6379, Langfuse :3000, vLLM)
 docker compose -f docker/compose.yml up
 
 # Migrations (Atlas; DATABASE_URL must be set)
@@ -38,7 +38,7 @@ make atlas-migrate                   # apply (atlas migrate apply)
 make atlas-hash                      # rehash after editing migration files
 ```
 
-There is no `.env` auto-loading — export env yourself (`set -a; . ./.env; set +a`). Copy `.env.sample` to `.env`; local defaults match `docker/compose.yml` (pg creds doci/doci, MinIO doci/doci12345).
+There is no `.env` auto-loading — export env yourself (`set -a; . ./.env; set +a`). Copy `.env.sample` to `.env`; local defaults match `docker/compose.yml` (pg creds doci/doci, RustFS doci/doci12345).
 
 ## Architecture
 
@@ -51,7 +51,7 @@ The same FastAPI app factory (`doci.api.create_app`) is reused by every deployme
 **Import order is load-bearing** in every entrypoint: `import doci.telemetry` must come *before* `doci.taskiq`, because telemetry installs `TaskiqInstrumentor` (which wraps `AsyncBroker.__init__`) and must be active before the broker is constructed. Task modules (`doci.workflows.*.task`, `doci.scheduler.tasks`) are imported for their import side-effect — registering `@broker.task` and event handlers.
 
 ### Job flow (mining → audit)
-1. `POST /documents` → presigned S3/MinIO upload URL. Client PUTs bytes. `POST /documents/{id}/finalize` marks it READY and sets page_count.
+1. `POST /documents` → presigned S3/RustFS upload URL. Client PUTs bytes. `POST /documents/{id}/finalize` marks it READY and sets page_count.
 2. `POST /workflows {document_id, workflow:"document_mining", dossier_key?}` enqueues a TaskIQ job and writes a `workflow_execution` row. Returns `{execution_id, task_id}`.
 3. The mining task (`langgraph_document_mining/task.py`) runs a LangGraph graph: `finalize` (classify by type) → conditional route to the **pdf** or **image** child subgraph (or `unsupported`). PDF branch splits pages and fans out per-page extract/annotate/thumbnail (`DOCI_PDF_PAGE_CONCURRENCY`).
 4. Passing `dossier_key` drives per-page classification AND **auto-chains an audit** on mining success (`enqueue_audit`). `job_id == document_id` ties the mining run and its audit together across all spans.
@@ -68,11 +68,11 @@ Per-task, three-level env resolution: `DOCI_LLM_<TASK>_<FIELD>` → `DOCI_LLM_<F
 
 ### Persistence
 - **Postgres** — schema via **Atlas** versioned migrations in `migrations/` (NOT an ORM auto-migrate). Key tables: `media`, `document` / `document_part`, `workflow_execution`, `workflow_result` (mined output keyed by `(execution_id, part_id)`; kind `extract.md` = OCR text, `annotation.json` = facts), `audit_findings`, and the `userdata` tables (dossiers, document defs, agent rules, knowledge).
-- **S3/MinIO** (`doci/objstore`) — raw media + thumbnails, accessed via presigned URLs.
+- **S3/RustFS** (`doci/objstore`) — raw media + thumbnails, accessed via presigned URLs.
 - **Valkey/Redis** — three logical dbs: db 0 KV cache (`doci:` prefix), db 1 TaskIQ broker/results, db 2 LangGraph checkpoints.
 
 ### Telemetry
-OpenTelemetry throughout (FastAPI, botocore, psycopg2, redis, taskiq auto-instrumented; LangChain via openinference). Phoenix is the local trace UI (`compose.phoenix.yml`). `DOCI_LLM_TRACE_CONTENT=false` by default — raw prompts/responses (incl. base64 images, PII) are NOT captured unless enabled; token/model/timing always are.
+OpenTelemetry throughout (FastAPI, botocore, psycopg2, redis, taskiq auto-instrumented; LangChain via openinference). Langfuse is the local trace UI (`compose.langfuse.yml`, a multi-service stack at :3000); it ingests traces only over OTLP/HTTP, so enable it via the `.env.sample` `OTEL_EXPORTER_OTLP_*` block (`OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf`, metrics/logs off). `DOCI_LLM_TRACE_CONTENT=false` by default — raw prompts/responses (incl. base64 images, PII) are NOT captured unless enabled; token/model/timing always are.
 
 ## Conventions
 

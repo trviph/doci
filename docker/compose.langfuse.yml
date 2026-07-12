@@ -1,0 +1,196 @@
+# Langfuse — self-hosted LLM-observability stack (replaces the single-container
+# Arize Phoenix trace UI). Langfuse ingests OpenTelemetry *traces* over OTLP/HTTP
+# at http://localhost:3000/api/public/otel (Basic-auth; see .env.sample). It is a
+# multi-service system: web + worker + Postgres + ClickHouse + Redis + an
+# S3-compatible blob store.
+#
+# Fully isolated: every backing service here is dedicated to Langfuse and kept
+# internal to the `doci` network — only langfuse-web publishes a host port (3000),
+# so nothing clashes with the app's own RustFS (9000/9001), Postgres (5432) or
+# Valkey (6379). The blob store is its own RustFS instance (no MinIO anywhere).
+#
+# LANGFUSE_INIT_* seeds an org/project/user and a deterministic API key pair on
+# first boot, so tracing works on a clean `docker compose up` with no manual UI
+# step. The matching Basic-auth header is pre-computed in .env.sample.
+services:
+  langfuse-web:
+    image: langfuse/langfuse:3
+    depends_on:
+      langfuse-postgres:
+        condition: service_healthy
+      langfuse-clickhouse:
+        condition: service_healthy
+      langfuse-redis:
+        condition: service_healthy
+      langfuse-blob:
+        condition: service_healthy
+    ports:
+      - "3000:3000"   # web UI + OTLP/HTTP collector (/api/public/otel)
+    environment:
+      DATABASE_URL: postgresql://langfuse:langfuse@langfuse-postgres:5432/langfuse
+      SALT: doci-local-salt
+      ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: doci-local-nextauth-secret
+      TELEMETRY_ENABLED: "false"
+      CLICKHOUSE_MIGRATION_URL: clickhouse://langfuse-clickhouse:9000
+      CLICKHOUSE_URL: http://langfuse-clickhouse:8123
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: clickhouse
+      CLICKHOUSE_CLUSTER_ENABLED: "false"
+      REDIS_HOST: langfuse-redis
+      REDIS_PORT: "6379"
+      REDIS_AUTH: doci-local-redis
+      LANGFUSE_S3_EVENT_UPLOAD_ENABLED: "true"
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: us-east-1
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://langfuse-blob:9000
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: langfuse
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: langfuse12345
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+      # Seed a deterministic org/project/user + API keys on first boot.
+      LANGFUSE_INIT_ORG_ID: doci
+      LANGFUSE_INIT_ORG_NAME: Doci
+      LANGFUSE_INIT_PROJECT_ID: doci
+      LANGFUSE_INIT_PROJECT_NAME: doci
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: pk-lf-doci-local-public
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: sk-lf-doci-local-secret
+      LANGFUSE_INIT_USER_EMAIL: doci@example.com
+      LANGFUSE_INIT_USER_NAME: doci
+      LANGFUSE_INIT_USER_PASSWORD: doci12345
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/public/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - doci
+
+  langfuse-worker:
+    image: langfuse/langfuse-worker:3
+    depends_on:
+      langfuse-postgres:
+        condition: service_healthy
+      langfuse-clickhouse:
+        condition: service_healthy
+      langfuse-redis:
+        condition: service_healthy
+      langfuse-blob:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://langfuse:langfuse@langfuse-postgres:5432/langfuse
+      SALT: doci-local-salt
+      ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+      TELEMETRY_ENABLED: "false"
+      CLICKHOUSE_MIGRATION_URL: clickhouse://langfuse-clickhouse:9000
+      CLICKHOUSE_URL: http://langfuse-clickhouse:8123
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: clickhouse
+      CLICKHOUSE_CLUSTER_ENABLED: "false"
+      REDIS_HOST: langfuse-redis
+      REDIS_PORT: "6379"
+      REDIS_AUTH: doci-local-redis
+      LANGFUSE_S3_EVENT_UPLOAD_ENABLED: "true"
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: us-east-1
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://langfuse-blob:9000
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: langfuse
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: langfuse12345
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+    networks:
+      - doci
+
+  langfuse-postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: langfuse
+      POSTGRES_PASSWORD: langfuse
+      POSTGRES_DB: langfuse
+    volumes:
+      - langfuse_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langfuse -d langfuse"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - doci
+
+  langfuse-clickhouse:
+    image: clickhouse/clickhouse-server
+    user: "101:101"
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: clickhouse
+    volumes:
+      - langfuse_clickhouse_data:/var/lib/clickhouse
+      - langfuse_clickhouse_logs:/var/log/clickhouse-server
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    networks:
+      - doci
+
+  langfuse-redis:
+    image: redis:7
+    command: ["redis-server", "--requirepass", "doci-local-redis"]
+    volumes:
+      - langfuse_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "doci-local-redis", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - doci
+
+  # Langfuse's own S3-compatible blob store (RustFS, isolated from the app store).
+  langfuse-blob:
+    image: rustfs/rustfs:latest
+    environment:
+      RUSTFS_ACCESS_KEY: langfuse
+      RUSTFS_SECRET_KEY: langfuse12345
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_CONSOLE_ENABLE: "false"
+    volumes:
+      - langfuse_blob_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - doci
+
+  # One-shot: create the `langfuse` bucket (Langfuse does not auto-create it).
+  langfuse-blob-init:
+    image: amazon/aws-cli:latest
+    depends_on:
+      langfuse-blob:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: langfuse
+      AWS_SECRET_ACCESS_KEY: langfuse12345
+      AWS_DEFAULT_REGION: us-east-1
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - aws --endpoint-url http://langfuse-blob:9000 s3 mb s3://langfuse || true
+    networks:
+      - doci
+
+volumes:
+  langfuse_postgres_data:
+  langfuse_clickhouse_data:
+  langfuse_clickhouse_logs:
+  langfuse_redis_data:
+  langfuse_blob_data:
+
+networks:
+  doci:
+    name: doci
