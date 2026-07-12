@@ -59,6 +59,7 @@ def untraced(fn: Callable[_P, _R]) -> Callable[_P, _R]:
 
     return wrapper  # type: ignore[return-value]
 
+
 _DEFAULT_TRACER: Tracer = trace.get_tracer("doci")
 _DEFAULT_METER = metrics.get_meter("doci")
 
