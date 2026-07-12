@@ -23,6 +23,7 @@ from doci.agents.audit_orchestrator import (
     LLM_DEFAULT_MODEL,
     LLM_TASK,
 )
+from doci.agents.ratelimit import build_rate_limit_middleware
 from doci.llm import build_chat_model
 from doci.prompts import load, output_language_directive
 from doci.tools.collect_facts import build_collect_facts
@@ -78,6 +79,7 @@ def build_reflection_agent(
         model=model,
         tools=tools,
         system_prompt=load("audit_reflect") + output_language_directive(language),
+        middleware=build_rate_limit_middleware(clients.kv, LLM_TASK),
         checkpointer=checkpointer,
         name="audit_reflect",
     )

@@ -16,6 +16,7 @@ from langchain_core.language_models import BaseChatModel
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph.state import CompiledStateGraph
 
+from doci.agents.ratelimit import build_rate_limit_middleware
 from doci.agents.rule_auditor import build_rule_auditor
 from doci.llm import build_chat_model
 from doci.prompts import load, output_language_directive
@@ -119,6 +120,9 @@ def build_finding_agent(
         # identical prefix across the loop.
         cache_key=f"doci:audit:{audit_execution_id}",
     )
+    # Pace this run's model calls (orchestrator + the rule_auditor subagent, which
+    # shares this model) against a shared per-task token budget to avoid 429s.
+    rate_limit = build_rate_limit_middleware(clients.kv, LLM_TASK)
     rds = clients.workflow_results
 
     # mined evidence (keyed to the mining run)
@@ -140,7 +144,9 @@ def build_finding_agent(
 
     # rule subagent: evidence + deterministic + knowledge + record_finding
     sub_base = [*evidence, search_kb, get_kb, record, *_DETERMINISTIC]
-    rule_sub = build_rule_auditor(sub_base, _TAGS, model, language=language)
+    rule_sub = build_rule_auditor(
+        sub_base, _TAGS, model, language=language, middleware=rate_limit
+    )
 
     # orchestrator: requirements + coverage + knowledge + record
     orch_base = [
@@ -162,6 +168,7 @@ def build_finding_agent(
         tools=orch_tools,
         system_prompt=load("audit_orchestrator") + output_language_directive(language),
         subagents=[rule_sub],
+        middleware=rate_limit,
         checkpointer=checkpointer,
         name="audit",
     )
