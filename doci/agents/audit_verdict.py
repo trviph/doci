@@ -19,6 +19,7 @@ from doci.agents.audit_orchestrator import (
     LLM_DEFAULT_MODEL,
     LLM_TASK,
 )
+from doci.agents.ratelimit import build_rate_limit_middleware
 from doci.llm import build_chat_model
 from doci.prompts import load, output_language_directive
 from doci.tools.get_knowledge import build_get_knowledge
@@ -58,6 +59,7 @@ def build_verdict_agent(
         model=model,
         tools=tools,
         system_prompt=load("audit_verdict") + output_language_directive(language),
+        middleware=build_rate_limit_middleware(clients.kv, LLM_TASK),
         checkpointer=checkpointer,
         name="audit_verdict",
     )
