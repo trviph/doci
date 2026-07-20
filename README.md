@@ -1,41 +1,24 @@
 # Doci
 
-> Document Intelligent engine in an agentic era.
-
 > [!NOTE]
-> **Archived — this repo is no longer maintained.**
-> Doci was a demo MVP built to explore a financial-auditing project for a
-> client. The real need turned out to be considerably more complex than this
-> MVP's architecture anticipated. The core spirit — agentic document mining and
-> rule-based auditing — still holds, but the design is being rethought from
-> scratch. This codebase is left here as a reference snapshot, not a foundation
-> to build on.
+> **Archived: This repository is no longer maintained.**
+> Doci was built as a demo to test automated financial auditing for a client. We discovered that real-world needs are far more complex than this initial architecture could support. While the core idea—using AI agents to extract data from documents and audit them against rules and smarter agents—is still valid, the system is being redesigned from scratch.
+> *This code is left here as a historical reference, not as a foundation for new projects.*
 
-### Why it's archived — the open problems
+## Why it's archived (The 6 Open Problems)
 
-Building this MVP made six problems concrete. Each is a general problem; the
-question in italics is just the specific example that first exposed it. They run
-from the most concrete to the most abstract, and any next version has to answer
-them:
+Building this demo revealed six major challenges. Any future version of this tool must solve these problems:
 
-- **Relevancy** — Determining whether a given input actually pertains to the task
-  at hand. *e.g. how do we know a document is relevant to a dossier at all?*
-- **Understanding** — Extracting meaning from arbitrary, non-clean-text content
-  and judging it against a requirement. *e.g. how do we understand a report
-  that's just an image, or full of charts, and decide whether it satisfies the
-  contract?*
-- **Trust** — Making the system behave predictably and reproducibly enough that
-  people can rely on it. *e.g. how do we ensure different people get
-  similar-enough results and can trust the system?*
-- **Evaluation** — Being able to tell whether a change improves or regresses
-  results, fast and cheap enough to iterate. *e.g. how do we know a prompt change
-  made the result better or worse, quickly and cheaply?*
-- **Scale** — Designing so the system grows across many use cases without
-  fragmenting or breaking to accommodate any one. *e.g. how do we serve
-  different use cases without tearing the system apart for a single user's need?*
-- **Cost** — Whether the economics hold up: is the value produced worth what it
-  costs to produce. *e.g. is a single document audit worth its cost, versus just
-  hiring a person to do the auditing for a month?*
+* **Relevancy:** How do we confirm a document is actually related to the task at hand?
+* **Understanding:** How do we accurately pull meaning from messy files (like images or charts) and check it against strict rules?
+* **Trust:** How do we guarantee the AI gives consistent, reliable answers every time?
+* **Evaluation:** How can we quickly and cheaply test if changing a prompt made the system better or worse?
+* **Scale:** How do we support many different use cases without making the system too bloated or fragile?
+* **Cost:** Is the cost of running the AI worth it compared to hiring a human auditor?
+
+---
+
+Document Intelligent engine in an agentic era.
 
 Doci is an agentic document-processing service. It **mines** documents (split → OCR/extract → annotate facts → classify each page against a *dossier*) and then **audits** the mined facts against rules using LLM deep-agents, producing structured **findings** and a **verdict**.
 
