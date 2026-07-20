@@ -2,6 +2,41 @@
 
 > Document Intelligent engine in an agentic era.
 
+> [!NOTE]
+> **Archived — this repo is no longer maintained.**
+> Doci was a demo MVP built to explore a financial-auditing project for a
+> client. The real need turned out to be considerably more complex than this
+> MVP's architecture anticipated. The core spirit — agentic document mining and
+> rule-based auditing — still holds, but the design is being rethought from
+> scratch. This codebase is left here as a reference snapshot, not a foundation
+> to build on.
+
+### Why it's archived — the open problems
+
+Building this MVP made six problems concrete. Each is a general problem; the
+question in italics is just the specific example that first exposed it. They run
+from the most concrete to the most abstract, and any next version has to answer
+them:
+
+- **Relevancy** — Determining whether a given input actually pertains to the task
+  at hand. *e.g. how do we know a document is relevant to a dossier at all?*
+- **Understanding** — Extracting meaning from arbitrary, non-clean-text content
+  and judging it against a requirement. *e.g. how do we understand a report
+  that's just an image, or full of charts, and decide whether it satisfies the
+  contract?*
+- **Trust** — Making the system behave predictably and reproducibly enough that
+  people can rely on it. *e.g. how do we ensure different people get
+  similar-enough results and can trust the system?*
+- **Evaluation** — Being able to tell whether a change improves or regresses
+  results, fast and cheap enough to iterate. *e.g. how do we know a prompt change
+  made the result better or worse, quickly and cheaply?*
+- **Scale** — Designing so the system grows across many use cases without
+  fragmenting or breaking to accommodate any one. *e.g. how do we serve
+  different use cases without tearing the system apart for a single user's need?*
+- **Cost** — Whether the economics hold up: is the value produced worth what it
+  costs to produce. *e.g. is a single document audit worth its cost, versus just
+  hiring a person to do the auditing for a month?*
+
 Doci is an agentic document-processing service. It **mines** documents (split → OCR/extract → annotate facts → classify each page against a *dossier*) and then **audits** the mined facts against rules using LLM deep-agents, producing structured **findings** and a **verdict**.
 
 It's built on **FastAPI** (HTTP API), **TaskIQ** (durable background jobs), **LangGraph** (workflow orchestration), and **deepagents** (the audit agents), backed by **Postgres**, **S3/RustFS**, and **Valkey/Redis**.
